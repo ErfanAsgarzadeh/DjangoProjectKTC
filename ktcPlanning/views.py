@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 
+from .cpm import run_cpm
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode
 from .serializers import (
@@ -156,7 +157,35 @@ class RevisionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(new_revision)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'], url_path='run-cpm')
+    def run_cpm_engine(self, request, pk=None):
+        """
+        اجرای موتور محاسباتی زمان‌بندی (CPM) روی یک نسخه خاص
+        """
+        revision = self.get_object()
 
+        # بررسی اینکه آیا نسخه باز است و قابلیت ویرایش دارد یا خیر
+        check_revision_is_open(revision)
+
+        try:
+            # اجرای موتور CPM که Early/Late start و finish ها را حساب و ذخیره می‌کند
+            cpm_result = run_cpm(revision)
+
+            # پس از محاسبه، مستقیماً داده‌های آپدیت‌شده گانت‌چارت را استخراج کرده و برمی‌گردانیم
+            # این کار باعث می‌شود فرانت‌اند نیاز به Request دوم نداشته باشد
+            return self.get_gantt_data(request, pk=pk)
+
+        except ValueError as e:
+            # این خطا معمولاً به خاطر وجود حلقه (Cycle) در گراف وابستگی‌ها پرتاب می‌شود
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"خطای پیش‌بینی نشده در محاسبات CPM: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 class WbsNodeViewSet(viewsets.ModelViewSet):
     queryset = WBSNodeVersion.objects.filter(is_deleted=False)
     serializer_class = WbsNodeSerializer
@@ -269,3 +298,5 @@ class DependencyViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         check_revision_is_open(instance.revision)
         instance.delete()  # وابستگی‌ها می‌توانند فیزیکی حذف شوند
+
+

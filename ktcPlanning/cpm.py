@@ -471,9 +471,11 @@ class CPMEngine:
         self._load_calendars()        # ← تقویم‌ها بعد از load تسک‌ها
         order = self._topological_sort()
         self._forward_pass(order)
-        self._backward_pass(order)
+        self.backward_pass(order)
         self._compute_floats()
         self._save_metrics()
+
+        self._rollup_wbs_dates()
 
         return CPMResult(revision=self.revision, nodes=self.nodes)
 
@@ -486,7 +488,76 @@ class CPMEngine:
             return (self._project_finish - self._project_start).days
         return None
 
+    # ─── محاسبه تاریخ‌های WBS (Roll-up) ─────────
 
+    def _rollup_wbs_dates(self) -> None:
+        """
+        محاسبه تاریخ شروع و پایان گره‌های WBS بر اساس تسک‌های زیرمجموعه.
+        این کار به روش Bottom-Up (از پایین‌ترین سطح WBS به سمت ریشه) انجام می‌شود.
+        """
+        from .models import WBSNodeVersion, TaskVersion
+        from django.db.models import Min, Max
+
+        # ۱. گرفتن تمام WBSهای این نسخه به ترتیب از عمیق‌ترین سطح به بالا
+        # فرض بر این است که فیلد level در مدل WBS عمق را نشان می‌دهد
+        wbs_nodes = list(WBSNodeVersion.objects.filter(
+            revision=self.revision,
+            is_deleted=False
+        ).order_by('-level'))
+
+        # دیکشنری برای نگهداری تاریخ‌های محاسبه شده هر WBS در حافظه موقت
+        wbs_dates = {}  # wbs_id → {'start': datetime, 'finish': datetime}
+
+        # ۲. استخراج تاریخ تسک‌ها برای هر WBS (مستقیماً متصل به تسک)
+        tasks_agg = TaskVersion.objects.filter(
+            revision=self.revision,
+            is_deleted=False
+        ).values('wbs_node_id').annotate(
+            min_start=Min('planned_start'),
+            max_finish=Max('planned_finish')
+        )
+
+        for agg in tasks_agg:
+            if agg['wbs_node_id']:
+                wbs_dates[agg['wbs_node_id']] = {
+                    'start': agg['min_start'],
+                    'finish': agg['max_finish']
+                }
+
+        # ۳. پیمایش WBSها از پایین به بالا برای محاسبه تاریخ والدها
+        wbs_to_update = []
+
+        for wbs in wbs_nodes:
+            my_start = wbs_dates.get(wbs.id, {}).get('start')
+            my_finish = wbs_dates.get(wbs.id, {}).get('finish')
+
+            # اگر تاریخ WBS با محاسبات جدید فرق کرده، آن را برای آپدیت آماده کن
+            if getattr(wbs, 'planned_start', None) != my_start or getattr(wbs, 'planned_finish', None) != my_finish:
+                wbs.planned_start = my_start
+                wbs.planned_finish = my_finish
+                wbs_to_update.append(wbs)
+
+            # ۴. انتقال تاریخ‌های این WBS به گره والدش (برای WBSهای تو در تو)
+            if wbs.parent_id:
+                parent_id = wbs.parent_id
+                if parent_id not in wbs_dates:
+                    wbs_dates[parent_id] = {'start': my_start, 'finish': my_finish}
+                else:
+                    curr_p_start = wbs_dates[parent_id]['start']
+                    curr_p_finish = wbs_dates[parent_id]['finish']
+
+                    # آپدیت تاریخ شروع والد (زودترین)
+                    if my_start and (not curr_p_start or my_start < curr_p_start):
+                        wbs_dates[parent_id]['start'] = my_start
+
+                    # آپدیت تاریخ پایان والد (دیرترین)
+                    if my_finish and (not curr_p_finish or my_finish > curr_p_finish):
+                        wbs_dates[parent_id]['finish'] = my_finish
+
+        # ۵. ذخیره یک‌جای تمام WBSهای تغییر یافته در دیتابیس
+        if wbs_to_update:
+            WBSNodeVersion.objects.bulk_update(wbs_to_update, ['planned_start', 'planned_finish'])
+            logger.info("CPM: %d WBS node dates rolled up successfully.", len(wbs_to_update))
 # ─────────────────────────────────────────
 # نتیجه اجرا
 # ─────────────────────────────────────────

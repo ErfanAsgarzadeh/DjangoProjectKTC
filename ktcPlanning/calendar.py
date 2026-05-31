@@ -2,20 +2,6 @@
 موتور تقویم کاری
 ─────────────────
 وظیفه: با گرفتن (start, duration_hours, calendar) بگوید finish دقیقاً کِی است.
-
-ورودی‌ها:
-  - start        : datetime — لحظه شروع تسک
-  - duration_hours: Decimal/float — حجم کار (ساعت خالص)
-  - calendar     : Calendar instance — با prefetch intervals و exceptions
-
-خروجی:
-  - finish       : datetime — لحظه پایان واقعی بر اساس تقویم
-
-مثال:
-  start = شنبه ۰۸:۰۰
-  duration = ۲۰ ساعت
-  تقویم: شنبه تا چهارشنبه ۰۸-۱۷ (۹ ساعت روزانه)
-  → finish = دوشنبه ۱۷:۰۰  (شنبه ۹h + یکشنبه ۹h + دوشنبه ۲h)
 """
 
 from __future__ import annotations
@@ -85,12 +71,7 @@ class DaySchedule:
 
 class CalendarEngine:
     """
-    موتور تقویم کاری.
-
-    استفاده:
-        engine = CalendarEngine(calendar)
-        finish = engine.add_working_hours(start, 40)
-        hours  = engine.working_hours_between(start, finish)
+    موتور تقویم کاری با پشتیبانی کامل از Timezone (Offset-aware).
     """
 
     MAX_SEARCH_DAYS = 1_825  # ۵ سال — حد امنیتی برای جلوگیری از حلقه بی‌نهایت
@@ -107,20 +88,16 @@ class CalendarEngine:
             self._intervals.setdefault(interval.weekday, []).append(
                 (interval.start_time, interval.end_time)
             )
-        # مرتب‌سازی هر روز بر اساس ساعت شروع
         for wd in self._intervals:
             self._intervals[wd].sort()
 
         for exc in self.calendar.exceptions.all():
             if exc.is_working:
-                # روز استثنای کاری — بازه پیش‌فرض ۰۸-۱۷
                 self._exceptions[exc.date] = [(
                     datetime.time(8, 0),
                     datetime.time(17, 0),
-
-)]
+                )]
             else:
-                # تعطیل — هیچ بازه‌ای
                 self._exceptions[exc.date] = None
 
     def get_day_schedule(self, date: datetime.date) -> DaySchedule:
@@ -139,7 +116,7 @@ class CalendarEngine:
     ) -> datetime.datetime:
         """
         از لحظه start به اندازه hours ساعت کاری جلو برو و finish را برگردان.
-        تعطیلات و بازه‌های غیرکاری نادیده گرفته می‌شوند.
+        اطلاعات مربوط به timezone ورودی (start.tzinfo) حفظ می‌شود.
         """
         hours = float(hours)
         if hours <= 0:
@@ -153,14 +130,12 @@ class CalendarEngine:
         while remaining > 0:
             if days_searched > self.MAX_SEARCH_DAYS:
                 raise RuntimeError(
-                    f"CalendarEngine: بیش از {self.MAX_SEARCH_DAYS} روز بدون یافتن ساعت کاری. "
-                    "لطفاً تقویم را بررسی کنید."
+                    f"CalendarEngine: بیش از {self.MAX_SEARCH_DAYS} روز بدون یافتن ساعت کاری."
                 )
 
             schedule = self.get_day_schedule(current_date)
 
             if not schedule.is_working():
-                # روز تعطیل — رد شو
                 current_date += datetime.timedelta(days=1)
                 current_time = datetime.time(0, 0)
                 days_searched += 1
@@ -169,34 +144,29 @@ class CalendarEngine:
             available = schedule.hours_from(current_time)
 
             if available <= 0:
-                # ساعت کاری این روز تمام شده
                 current_date += datetime.timedelta(days=1)
                 current_time = datetime.time(0, 0)
                 days_searched += 1
                 continue
 
             if remaining <= available:
-                # کار در همین روز تمام می‌شود
                 finish_time = schedule.time_after_hours(current_time, remaining)
-                return datetime.datetime.combine(current_date, finish_time)
+                # اضافه کردن پارامتر tzinfo برای حفظ منطق زمانی جنگو
+                return datetime.datetime.combine(current_date, finish_time, tzinfo=start.tzinfo)
 
-            # کار به روز بعد می‌کشد
             remaining -= available
             current_date += datetime.timedelta(days=1)
             current_time = datetime.time(0, 0)
             days_searched += 1
 
-        return datetime.datetime.combine(current_date, current_time)
+        return datetime.datetime.combine(current_date, current_time, tzinfo=start.tzinfo)
 
     def working_hours_between(
         self,
         start: datetime.datetime,
         finish: datetime.datetime,
     ) -> float:
-        """
-        تعداد ساعات کاری خالص بین دو لحظه را برمی‌گرداند.
-        برای محاسبه duration واقعی تسک استفاده می‌شود.
-        """
+        """تعداد ساعات کاری خالص بین دو لحظه را برمی‌گرداند."""
         if finish <= start:
             return 0.0
 
@@ -233,7 +203,7 @@ class CalendarEngine:
     ) -> datetime.datetime:
         """
         از finish به اندازه hours ساعت کاری عقب برو و start را برگردان.
-        برای backward pass در CPM استفاده می‌شود.
+        اطلاعات مربوط به timezone ورودی (finish.tzinfo) حفظ می‌شود.
         """
         hours = float(hours)
         if hours <= 0:
@@ -256,7 +226,6 @@ class CalendarEngine:
                 days_searched += 1
                 continue
 
-            # ساعات کاری این روز تا current_time
             available = 0.0
             for iv_start, iv_end in reversed(schedule.intervals):
                 eff_end = min(iv_end, current_time)
@@ -273,13 +242,13 @@ class CalendarEngine:
                 continue
 
             if remaining <= available:
-                # نقطه شروع در همین روز است
                 for iv_start, iv_end in reversed(schedule.intervals):
                     eff_end = min(iv_end, current_time)
                     if eff_end <= iv_start:
                         continue
-                    s = datetime.datetime.combine(current_date, iv_start)
-                    e = datetime.datetime.combine(current_date, eff_end)
+                    # اعمال منطقه زمانی روی محاسبات داخلی بازگشت به عقب
+                    s = datetime.datetime.combine(current_date, iv_start, tzinfo=finish.tzinfo)
+                    e = datetime.datetime.combine(current_date, eff_end, tzinfo=finish.tzinfo)
                     slot = (e - s).total_seconds() / 3600
                     if remaining <= slot:
                         result = e - datetime.timedelta(hours=remaining)
@@ -291,13 +260,10 @@ class CalendarEngine:
             current_time = datetime.time(23, 59, 59)
             days_searched += 1
 
-        return datetime.datetime.combine(current_date, current_time)
+        return datetime.datetime.combine(current_date, current_time, tzinfo=finish.tzinfo)
 
     def next_working_moment(self, dt: datetime.datetime) -> datetime.datetime:
-        """
-        اگر dt در یک لحظه غیرکاری باشد، اولین لحظه کاری بعد از آن را برمی‌گرداند.
-        برای snap کردن planned_start به بازه کاری استفاده می‌شود.
-        """
+        """اگر dt در لحظه غیرکاری باشد، اولین لحظه کاری بعد از آن را با حفظ timezone برمی‌گرداند."""
         current_date = dt.date()
         current_time = dt.time()
 
@@ -310,11 +276,10 @@ class CalendarEngine:
 
             for iv_start, iv_end in schedule.intervals:
                 if current_time <= iv_start:
-                    return datetime.datetime.combine(current_date, iv_start)
+                    return datetime.datetime.combine(current_date, iv_start, tzinfo=dt.tzinfo)
                 if current_time < iv_end:
-                    return datetime.datetime.combine(current_date, current_time)
+                    return datetime.datetime.combine(current_date, current_time, tzinfo=dt.tzinfo)
 
-            # ساعت این روز گذشته — برو روز بعد
             current_date += datetime.timedelta(days=1)
             current_time = datetime.time(0, 0)
 
@@ -329,15 +294,8 @@ def compute_finish(
     task_version,
     calendar: "Calendar | None" = None,
 ) -> datetime.datetime:
-    """
-    planned_finish یک TaskVersion را محاسبه و ذخیره می‌کند.
-
-    اگر calendar پاس داده نشود از calendar خود task_version استفاده می‌کند.
-    اگر هیچ‌کدام نباشد، ساعت کاری پیش‌فرض (۸ ساعت/روز) فرض می‌شود.
-    """
     cal = calendar or task_version.calendar
     if cal is None:
-        # بدون تقویم: فرض ۸ ساعت روز کاری ۵ روز هفته
         finish = _simple_add_hours(task_version.planned_start, float(task_version.duration_hours))
     else:
         engine = CalendarEngine(cal)
@@ -350,11 +308,10 @@ def compute_finish(
 
 
 def _simple_add_hours(start: datetime.datetime, hours: float) -> datetime.datetime:
-    """فال‌بک بدون تقویم — فقط ۸ ساعت روز، ۵ روز هفته."""
     remaining = hours
     current = start
     while remaining > 0:
-        if current.weekday() < 5:  # شنبه تا چهارشنبه در تقویم میلادی = Mon-Fri
+        if current.weekday() < 5:
             day_end = current.replace(hour=17, minute=0, second=0, microsecond=0)
             available = max(0, (day_end - current).total_seconds() / 3600)
             if remaining <= available:
