@@ -29,14 +29,15 @@ class RevisionSerializer(serializers.ModelSerializer):
 
 
 class WbsNodeSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source='node.id', read_only=True)
     code = serializers.CharField(source='wbs_code', read_only=True)
     name = serializers.CharField(source='title')
-    parentId = serializers.PrimaryKeyRelatedField(source='parent', read_only=True)
+    parentId = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
     isExpanded = serializers.SerializerMethodField()
 
-    startDate = serializers.SerializerMethodField()
-    endDate = serializers.SerializerMethodField()
+    startDate = serializers.DateTimeField(source='planned_start', format="%Y-%m-%d", allow_null=True)
+    endDate = serializers.DateTimeField(source='planned_finish', format="%Y-%m-%d", allow_null=True)
     duration = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
 
@@ -45,6 +46,8 @@ class WbsNodeSerializer(serializers.ModelSerializer):
         fields = ['id', 'code', 'name', 'parentId', 'type', 'isExpanded',
                   'startDate', 'endDate', 'duration', 'progress']
 
+    def get_parentId(self, obj):
+        return obj.parent.node.id if obj.parent else None
     def get_type(self, obj):
         return 'wbs'
 
@@ -66,9 +69,10 @@ class WbsNodeSerializer(serializers.ModelSerializer):
 
 class ActivityNodeSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='task.id', read_only=True)
+
     code = serializers.SerializerMethodField()
     name = serializers.CharField(source='title')
-    parentId = serializers.PrimaryKeyRelatedField(source='wbs_node', read_only=True)
+    parentId = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
 
     startDate = serializers.DateTimeField(source='planned_start', format="%Y-%m-%d", allow_null=True)
@@ -90,6 +94,10 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
             'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes'
         ]
 
+    def get_parentId(self, obj):
+        # بررسی می‌کنیم که تسک به کدام ورژن WBS وصل است،
+        # سپس UUID گره اصلی آن WBS را به فرانت‌اند می‌فرستیم
+        return obj.wbs_node.node.id if obj.wbs_node else None
     # --- تبدیل دیتا هنگام ارسال به فرانت‌اند (ساعت به روز) ---
     def to_representation(self, instance):
         data = super().to_representation(instance)

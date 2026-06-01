@@ -108,7 +108,8 @@ class WBSNodeVersion(MPTTModel):
     title = models.CharField(max_length=255)
     sequence = models.PositiveIntegerField(default=1)
     is_deleted = models.BooleanField(default=False)
-
+    planned_start = models.DateTimeField(null=True, blank=True, verbose_name="Planned Start Date")
+    planned_finish = models.DateTimeField(null=True, blank=True, verbose_name="Planned Finish Date")
     class MPTTMeta:
         order_insertion_by = ["sequence"]
 
@@ -122,6 +123,20 @@ class WBSNodeVersion(MPTTModel):
     def wbs_code(self):
         ancestors = self.get_ancestors(include_self=True)
         return ".".join(str(a.sequence) for a in ancestors)
+
+    def clean(self):
+        super().clean()
+        # اعتبارسنجی منطقی: تاریخ پایان نباید قبل از تاریخ شروع باشد
+        if self.planned_start and self.planned_finish:
+            if self.planned_start > self.planned_finish:
+                raise ValidationError({
+                    'planned_finish': "تاریخ پایان برنامه‌ریزی شده نمی‌تواند قبل از تاریخ شروع باشد."
+                })
+
+    def save(self, *args, **kwargs):
+        # اجرای متد clean قبل از ذخیره کردن در دیتابیس
+        self.full_clean()
+        super().save(*args, **kwargs)
 # =========================================================
 # 5. TASK (IDENTITY ONLY)
 # =========================================================

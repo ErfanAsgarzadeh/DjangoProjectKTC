@@ -190,7 +190,31 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
     queryset = WBSNodeVersion.objects.filter(is_deleted=False)
     serializer_class = WbsNodeSerializer
     permission_classes = [IsAuthenticated]
+    lookup_field = 'node__id'
 
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        lookup_value = self.kwargs[self.lookup_field]
+
+        # گرفتن ریویژن از آدرس در صورت وجود
+        revision_id = self.request.query_params.get('revision_id')
+
+        filter_kwargs = {self.lookup_field: lookup_value}
+        if revision_id:
+            filter_kwargs['revision_id'] = revision_id
+        else:
+            # پیدا کردن ردیف در نسخه‌ای که هنوز تایید و قفل نشده است
+            filter_kwargs['revision__approved_at__isnull'] = True
+
+        # استفاده از first() برای جلوگیری از ارور تعدد ردیف
+        obj = queryset.filter(**filter_kwargs).first()
+
+        if not obj:
+            from django.http import Http404
+            raise Http404("گره WBS در نسخه فعال یافت نشد.")
+
+        self.check_object_permissions(self.request, obj)
+        return obj
     def get_queryset(self):
         queryset = super().get_queryset()
         revision_id = self.request.query_params.get('revision_id')
@@ -221,9 +245,20 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
+        # بررسی قفل نبودن نسخه
         check_revision_is_open(instance.revision)
-        instance.is_deleted = True
-        instance.save()
+
+        # ۱. گرفتن خود گره و تمامی زیرمجموعه‌های آن (فرزندان، نوه‌ها و...) به کمک MPTT
+        descendants = instance.get_descendants(include_self=True)
+
+        # ۲. مخفی کردن تمام تسک‌هایی که به این گره‌ها (والد یا فرزندان) متصل هستند
+        TaskVersion.objects.filter(
+            wbs_node__in=descendants,
+            revision=instance.revision
+        ).update(is_deleted=True)
+
+        # ۳. مخفی کردن خود گره WBS و تمامی گره‌های فرزند آن به صورت یکجا
+        descendants.update(is_deleted=True)
 
 
 class ActivityNodeViewSet(viewsets.ModelViewSet):
@@ -231,6 +266,28 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
     serializer_class = ActivityNodeSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'task__id'
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        lookup_value = self.kwargs[self.lookup_field]
+
+        revision_id = self.request.query_params.get('revision_id')
+
+        filter_kwargs = {self.lookup_field: lookup_value}
+        if revision_id:
+            filter_kwargs['revision_id'] = revision_id
+        else:
+            filter_kwargs['revision__approved_at__isnull'] = True
+
+        # انتخاب دقیق همان ردیفی که متعلق به نسخه باز است
+        obj = queryset.filter(**filter_kwargs).first()
+
+        if not obj:
+            from django.http import Http404
+            raise Http404("تسک مورد نظر در نسخه فعال یافت نشد.")
+
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def get_queryset(self):
         queryset = super().get_queryset()
