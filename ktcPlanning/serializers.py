@@ -66,7 +66,21 @@ class WbsNodeSerializer(serializers.ModelSerializer):
     def get_progress(self, obj):
         return 0
 
+class TaskScheduleMetricsSerializer(serializers.ModelSerializer):
+    earlyStart = serializers.DateTimeField(source='early_start', format="%Y-%m-%d %H:%M:%S")
+    earlyFinish = serializers.DateTimeField(source='early_finish', format="%Y-%m-%d %H:%M:%S")
+    lateStart = serializers.DateTimeField(source='late_start', format="%Y-%m-%d %H:%M:%S")
+    lateFinish = serializers.DateTimeField(source='late_finish', format="%Y-%m-%d %H:%M:%S")
+    totalFloatHours = serializers.IntegerField(source='total_float_hours')
+    freeFloatHours = serializers.IntegerField(source='free_float_hours')
+    isCritical = serializers.BooleanField(source='is_critical')
 
+    class Meta:
+        model = TaskScheduleMetrics
+        fields = [
+            'earlyStart', 'earlyFinish', 'lateStart', 'lateFinish',
+            'totalFloatHours', 'freeFloatHours', 'isCritical'
+        ]
 class ActivityNodeSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='task.id', read_only=True)
 
@@ -86,12 +100,12 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     constraintType = serializers.SerializerMethodField()
     constraintDate = serializers.SerializerMethodField()
     notes = serializers.SerializerMethodField()
-
+    metrics = TaskScheduleMetricsSerializer(read_only=True, allow_null=True)
     class Meta:
         model = TaskVersion
         fields = [
             'id', 'code', 'name', 'parentId', 'type', 'startDate', 'endDate',
-            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes'
+            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes','metrics'
         ]
 
     def get_parentId(self, obj):
@@ -161,10 +175,60 @@ class DependencySerializer(serializers.ModelSerializer):
 
 
 class TaskRoleSerializer(serializers.ModelSerializer):
-    revisionId = serializers.PrimaryKeyRelatedField(source='revision', read_only=True)
-    taskId = serializers.PrimaryKeyRelatedField(source='task', read_only=True)
-    userId = serializers.PrimaryKeyRelatedField(source='user', read_only=True)
+    revisionId = serializers.PrimaryKeyRelatedField(source='revision', queryset=Revision.objects.all())
+    taskId = serializers.PrimaryKeyRelatedField(source='task', queryset=Task.objects.all())
+    userId = serializers.PrimaryKeyRelatedField(source='user', queryset=User.objects.all())
 
     class Meta:
         model = TaskRole
         fields = ['id', 'revisionId', 'taskId', 'userId', 'role']
+
+
+# ==========================================
+# My Tasks: Reporting & Chat Serializers
+# ==========================================
+
+class TaskReportLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskReportLog
+        fields = [
+            'id',
+            'task',
+            'user',
+            'status',
+            'progress_percent',
+            'time_spent_hours',
+            'notes',
+            'blockers',
+            'timestamp',
+            # فیلدهای مربوط به سیستم تایید که اضافه کردیم:
+            'is_approved',
+            'approved_by',
+            'approved_at'
+        ]
+        # این فیلدها نباید توسط کاربر عادی هنگام ثبت فرم مقداردهی شوند
+        read_only_fields = [
+            'id',
+            'timestamp',
+            'user',          # بک‌اند خودش از request.user می‌خواند
+            'is_approved',   # فقط از طریق ویوی approve_report تغییر می‌کند
+            'approved_by',
+            'approved_at'
+        ]
+
+class TaskChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskChatMessage
+        fields = [
+            'id',
+            'task',
+            'user',
+            'text',
+            'timestamp'
+        ]
+        read_only_fields = [
+            'id',
+            'timestamp',
+            'user' # بک‌اند خودش این را ست می‌کند
+        ]
+

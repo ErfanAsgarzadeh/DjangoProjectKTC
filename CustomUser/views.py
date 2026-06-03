@@ -23,3 +23,11 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         # این متد به صورت خودکار کاربری که توکن آن ارسال شده را برمی‌گرداند
         # نیازی نیست فرانت‌اند ID کاربر را در URL بفرستد
         return self.request.user
+
+class UserListView(generics.ListAPIView):
+    """
+    دریافت لیست تمام کاربران سیستم برای تخصیص به تسک‌ها در فرانت‌اند
+    """
+    queryset = CustomUser.objects.all().order_by('id')
+    serializer_class = CustomUserSerializer
+    permission_classes = [IsAuthenticated]

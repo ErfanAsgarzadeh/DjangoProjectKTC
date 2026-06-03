@@ -341,3 +341,62 @@ class Baseline(models.Model):
     revision = models.OneToOneField(Revision, on_delete=models.CASCADE, related_name="baseline")
     created_at = models.DateTimeField(auto_now_add=True)
 
+
+# =========================================================
+# 14. TASK REPORTING (MY TASKS SYSTEM)
+# =========================================================
+
+class TaskReportLog(models.Model):
+    STATUS_CHOICES = [
+        ("on-track", "On Track"),
+        ("at-risk", "At Risk"),
+        ("blocked", "Blocked"),
+        ("completed", "Completed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # اتصال به TaskVersion تا گزارش‌ها متعلق به یک نسخه خاص از برنامه باشند
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="report_logs")
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="submitted_reports")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="on-track")
+    progress_percent = models.PositiveIntegerField(default=0)
+    time_spent_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+
+    notes = models.TextField(blank=True, verbose_name="Progress Notes")
+    blockers = models.TextField(blank=True, verbose_name="Critical Blockers")
+
+    timestamp = models.DateTimeField(auto_now_add=True)
+    # فیلدهای جدید برای سیستم تایید
+    is_approved = models.BooleanField(default=False, verbose_name="وضعیت تایید")
+    approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="approved_reports"
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Report {self.progress_percent}% by {self.user} - Approved: {self.is_approved}"
+
+
+
+# =========================================================
+# 15. TASK CHAT & COLLABORATION
+# =========================================================
+
+class TaskChatMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # اتصال به Task (نه Version) تا تاریخچه مکالمات در ورژن‌های مختلف برنامه ثابت بماند
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="chat_messages")
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="chat_messages")
+
+    text = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']  # مرتب‌سازی از قدیمی به جدید برای نمایش درست در چت
+
+    def __str__(self):
+        return f"Message by {self.user} on {self.task}"

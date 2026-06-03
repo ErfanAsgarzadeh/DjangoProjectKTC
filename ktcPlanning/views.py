@@ -9,17 +9,18 @@ from django.db import transaction
 
 from .cpm import run_cpm
 # ایمپورت تمامی مدل‌های مورد نیاز
-from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode
+from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
+    TaskActual, TaskChatMessage
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
     WbsNodeSerializer,
     ActivityNodeSerializer,
     DependencySerializer,
-    TaskRoleSerializer
+    TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer
 )
 
-
+from django.db.models import Max
 def check_revision_is_open(revision):
     if revision.approved_at is not None:
         raise PermissionDenied("این نسخه قفل شده است و قابل تغییر نیست.")
@@ -70,7 +71,7 @@ class RevisionViewSet(viewsets.ModelViewSet):
         wbs_nodes = WBSNodeVersion.objects.filter(revision=revision, is_deleted=False)
         wbs_serializer = WbsNodeSerializer(wbs_nodes, many=True)
 
-        tasks = TaskVersion.objects.filter(revision=revision, is_deleted=False)
+        tasks = TaskVersion.objects.filter(revision=revision, is_deleted=False).select_related('metrics')
         activity_serializer = ActivityNodeSerializer(tasks, many=True)
 
         nodes = wbs_serializer.data + activity_serializer.data
@@ -235,10 +236,28 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
         parent_id = self.request.data.get('parentId')
         parent_node = None
         if parent_id:
-            parent_node = get_object_or_404(WBSNodeVersion, id=parent_id, revision=revision)
+            parent_node = get_object_or_404(WBSNodeVersion, node_id=parent_id, revision=revision)
+
+        # ---------------- NEW CODE ----------------
+        # Calculate the next sequence number for this parent in this revision
+        max_seq_dict = WBSNodeVersion.objects.filter(
+            revision=revision,
+            parent=parent_node
+        ).aggregate(Max('sequence'))
+
+        current_max_seq = max_seq_dict.get('sequence__max') or 0
+        next_sequence = current_max_seq + 1
+        # ------------------------------------------
 
         base_node = WBSNode.objects.create(project=revision.project)
-        serializer.save(node=base_node, revision=revision, parent=parent_node)
+
+        # Pass the newly calculated sequence to save()
+        serializer.save(
+            node=base_node,
+            revision=revision,
+            parent=parent_node,
+            sequence=next_sequence
+        )
 
     def perform_update(self, serializer):
         check_revision_is_open(serializer.instance.revision)
@@ -262,7 +281,7 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
 
 
 class ActivityNodeViewSet(viewsets.ModelViewSet):
-    queryset = TaskVersion.objects.filter(is_deleted=False)
+    queryset = TaskVersion.objects.filter(is_deleted=False).select_related('metrics')
     serializer_class = ActivityNodeSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'task__id'
@@ -292,8 +311,15 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         revision_id = self.request.query_params.get('revision_id')
+        user_id = self.request.query_params.get('user_id')  # <--- فیلتر جدید
+
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
+
+        # فیلتر کردن تسک‌هایی که این کاربر در آن‌ها نقش دارد
+        if user_id:
+            queryset = queryset.filter(task__roles__user_id=user_id).distinct()
+
         return queryset
 
     # --- هندل کردن ساخت صحیح تسک (گرفتن والد از ریکوئست) ---
@@ -312,7 +338,7 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
         if not parent_id:
             raise ValidationError({"parentId": "مشخص کردن گره والد (WBS) برای ساخت تسک الزامی است."})
 
-        wbs_node = get_object_or_404(WBSNodeVersion, id=parent_id, revision=revision)
+        wbs_node = get_object_or_404(WBSNodeVersion, node_id=parent_id, revision=revision)
 
         base_task = Task.objects.create(project=revision.project)
         serializer.save(task=base_task, revision=revision, wbs_node=wbs_node)
@@ -357,3 +383,97 @@ class DependencyViewSet(viewsets.ModelViewSet):
         instance.delete()  # وابستگی‌ها می‌توانند فیزیکی حذف شوند
 
 
+class TaskReportLogViewSet(viewsets.ModelViewSet):
+    queryset = TaskReportLog.objects.all()
+    serializer_class = TaskReportLogSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        task_id = self.request.query_params.get('task_id')
+        if task_id:
+            queryset = queryset.filter(task_id=task_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        # فقط ثبت گزارش در حالت "در انتظار تایید"
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        report = serializer.instance
+        # جلوگیری از ویرایش پس از تایید
+        if report.is_approved:
+            raise PermissionDenied("این گزارش قبلاً تایید شده و دیگر قابل ویرایش نیست.")
+        serializer.save()
+
+    @action(detail=True, methods=['post'], url_path='approve')
+    def approve_report(self, request, pk=None):
+        """تایید گزارش و اعمال پیشرفت روی تسک اصلی (گانت‌چارت)"""
+        report = self.get_object()
+
+        if report.is_approved:
+            return Response({"detail": "این گزارش قبلاً تایید شده است."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # تغییر وضعیت گزارش به تایید شده
+        report.is_approved = True
+        report.approved_by = request.user
+        report.approved_at = timezone.now()
+        report.save()
+
+        # اعمال پیشرفت در TaskActual
+        active_task_version = TaskVersion.objects.filter(
+            task=report.task,
+            revision__approved_at__isnull=True,  # نسخه‌ای که هنوز باز است
+            is_deleted=False
+        ).first()
+
+        if active_task_version:
+            task_actual, created = TaskActual.objects.get_or_create(
+                task_version=active_task_version,
+                defaults={'updated_by': request.user}
+            )
+            task_actual.progress = report.progress_percent
+            task_actual.updated_by = request.user
+            task_actual.save()
+
+        return Response({"detail": "گزارش تایید شد و پیشرفت تسک به‌روزرسانی گردید."}, status=status.HTTP_200_OK)
+
+
+class TaskChatMessageViewSet(viewsets.ModelViewSet):
+    queryset = TaskChatMessage.objects.all()
+    serializer_class = TaskChatMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        task_id = self.request.query_params.get('task_id')
+        if task_id:
+            queryset = queryset.filter(task_id=task_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class TaskRoleViewSet(viewsets.ModelViewSet):
+    """مدیریت نقش‌های تخصیص داده شده به تسک‌ها (Task Roles)"""
+    queryset = TaskRole.objects.all()
+    serializer_class = TaskRoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # امکان فیلتر کردن دیتای برگشتی
+        revision_id = self.request.query_params.get('revision_id')
+        task_id = self.request.query_params.get('task_id')
+        user_id = self.request.query_params.get('user_id')
+
+        if revision_id:
+            queryset = queryset.filter(revision_id=revision_id)
+        if task_id:
+            queryset = queryset.filter(task_id=task_id)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+
+        return queryset
