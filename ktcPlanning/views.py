@@ -6,11 +6,16 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
+from datetime import date, timedelta, datetime
+from decimal import Decimal
+from collections import defaultdict
+
+from rest_framework.views import APIView
 
 from .cpm import run_cpm
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
-    TaskActual, TaskChatMessage
+    TaskActual, TaskChatMessage, Assignment, Resource
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
@@ -391,9 +396,19 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         task_id = self.request.query_params.get('task_id')
+        for_approval = self.request.query_params.get('for_approval')
+
         if task_id:
             queryset = queryset.filter(task_id=task_id)
+
+        if for_approval == 'true':
+            queryset = queryset.filter(
+                task__roles__user=self.request.user,
+                task__roles__role__in=['reviewer', 'project manager'],
+                is_approved=False  # نمایش گزارش‌هایی که هنوز تایید نشده‌اند
+            ).distinct()
         return queryset
+
 
     def perform_create(self, serializer):
         # فقط ثبت گزارش در حالت "در انتظار تایید"
@@ -411,16 +426,27 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
         """تایید گزارش و اعمال پیشرفت روی تسک اصلی (گانت‌چارت)"""
         report = self.get_object()
 
+        # ۱. بررسی اینکه آیا گزارش قبلاً تایید شده است یا خیر
         if report.is_approved:
             return Response({"detail": "این گزارش قبلاً تایید شده است."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # تغییر وضعیت گزارش به تایید شده
+        # ۲. بررسی سطح دسترسی کاربر برای تایید این تسک خاص
+        has_permission = TaskRole.objects.filter(
+            task=report.task,
+            user=request.user,
+            role__in=['reviewer', 'project manager']
+        ).exists()
+
+        if not has_permission:
+            raise PermissionDenied("شما دسترسی لازم (مدیر پروژه یا بررسی‌کننده) برای تایید گزارش این تسک را ندارید.")
+
+        # ۳. تغییر وضعیت گزارش به تایید شده
         report.is_approved = True
         report.approved_by = request.user
         report.approved_at = timezone.now()
         report.save()
 
-        # اعمال پیشرفت در TaskActual
+        # ۴. اعمال پیشرفت در TaskActual
         active_task_version = TaskVersion.objects.filter(
             task=report.task,
             revision__approved_at__isnull=True,  # نسخه‌ای که هنوز باز است
@@ -437,8 +463,6 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
             task_actual.save()
 
         return Response({"detail": "گزارش تایید شد و پیشرفت تسک به‌روزرسانی گردید."}, status=status.HTTP_200_OK)
-
-
 class TaskChatMessageViewSet(viewsets.ModelViewSet):
     queryset = TaskChatMessage.objects.all()
     serializer_class = TaskChatMessageSerializer
@@ -477,3 +501,262 @@ class TaskRoleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(user_id=user_id)
 
         return queryset
+
+
+def _date_range(start: date, end: date):
+    """Yield every date from start to end (inclusive)."""
+    cur = start
+    while cur <= end:
+        yield cur
+        cur += timedelta(days=1)
+
+
+def _week_key(d: date) -> str:
+    iso = d.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def _month_key(d: date) -> str:
+    return f"{d.year}-{d.month:02d}"
+
+
+def _bucket_key(d: date, granularity: str) -> str:
+    if granularity == "week":
+        return _week_key(d)
+    if granularity == "month":
+        return _month_key(d)
+    return d.isoformat()          # "day" (default)
+
+
+def _bucket_label(key: str, granularity: str) -> str:
+    """Human-readable label for a bucket key."""
+    if granularity == "day":
+        d = date.fromisoformat(key)
+        return d.strftime("%d %b")
+    if granularity == "week":
+        # key like "2026-W23"
+        year, wk = key.split("-W")
+        d = datetime.strptime(f"{year}-W{wk}-1", "%G-W%V-%u").date()
+        return f"W{wk} ({d.strftime('%d %b')})"
+    if granularity == "month":
+        year, month = key.split("-")
+        d = date(int(year), int(month), 1)
+        return d.strftime("%b %Y")
+    return key
+
+
+def _working_days_in_bucket(bucket_dates: list[date]) -> int:
+    """Count Mon–Fri days in a list of dates (simplistic; ignores CalendarExceptions)."""
+    return sum(1 for d in bucket_dates if d.weekday() < 5)
+
+
+# ─── view ─────────────────────────────────────────────────────────────────────
+
+class ResourceHistogramView(APIView):
+    """
+    Returns a resource load histogram for a given revision.
+
+    Response shape:
+    {
+      "revision_id": "...",
+      "granularity": "day",
+      "buckets": ["2026-06-01", "2026-06-02", ...],
+      "bucket_labels": ["01 Jun", "02 Jun", ...],
+      "resources": [
+        {
+          "id": 1,
+          "name": "Ali Ahmadi",
+          "capacity_hours_per_day": 8.0,
+          "load": [
+            {
+              "bucket": "2026-06-01",
+              "allocated_hours": 6.0,
+              "capacity_hours": 8.0,
+              "load_percent": 75.0,
+              "status": "optimum",   // "underload" | "optimum" | "overload"
+              "tasks": [
+                {"task_id": "...", "title": "Design", "hours": 6.0}
+              ]
+            },
+            ...
+          ]
+        },
+        ...
+      ]
+    }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    UNDERLOAD_THRESHOLD = 50    # % below this → underload
+    OVERLOAD_THRESHOLD  = 100   # % above this → overload
+
+    def get(self, request, revision_id):
+        # ── 1. Fetch revision ──────────────────────────────────────────────
+        try:
+            revision = Revision.objects.get(pk=revision_id)
+        except Revision.DoesNotExist:
+            return Response({"detail": "Revision not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        granularity = request.query_params.get("granularity", "day")
+        if granularity not in ("day", "week", "month"):
+            return Response({"detail": "granularity must be day|week|month."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── 2. Pull all task versions for this revision ───────────────────
+        task_versions = (
+            TaskVersion.objects
+            .filter(revision=revision, is_deleted=False)
+            .exclude(planned_start=None)
+            .exclude(planned_finish=None)
+            .select_related("task")
+        )
+
+        # ── 3. Pull assignments for this revision ─────────────────────────
+        assignments = (
+            Assignment.objects
+            .filter(revision=revision)
+            .select_related("resource", "task")
+        )
+
+        # Map task_id → TaskVersion for quick lookup
+        tv_by_task = {str(tv.task_id): tv for tv in task_versions}
+
+        # ── 4. Determine global window ────────────────────────────────────
+        starts  = [tv.planned_start.date() for tv in task_versions]
+        finishes = [tv.planned_finish.date() for tv in task_versions]
+
+        if not starts:
+            return Response({
+                "revision_id": str(revision_id),
+                "granularity": granularity,
+                "buckets": [],
+                "bucket_labels": [],
+                "resources": [],
+            })
+
+        window_start = date.fromisoformat(request.query_params["start"]) if "start" in request.query_params else min(starts)
+        window_end   = date.fromisoformat(request.query_params["end"])   if "end"   in request.query_params else max(finishes)
+
+        all_dates = list(_date_range(window_start, window_end))
+
+        # ── 5. Build bucket → list[date] mapping ──────────────────────────
+        bucket_dates: dict[str, list[date]] = defaultdict(list)
+        for d in all_dates:
+            bucket_dates[_bucket_key(d, granularity)].append(d)
+
+        ordered_buckets = list(dict.fromkeys(_bucket_key(d, granularity) for d in all_dates))
+
+        # ── 6. Build per-resource, per-bucket load ────────────────────────
+        # Structure: resource_id → bucket_key → { allocated_hours, tasks }
+        resource_load: dict[int, dict[str, dict]] = defaultdict(
+            lambda: defaultdict(lambda: {"allocated_hours": Decimal("0"), "tasks": []})
+        )
+
+        resources_seen: dict[int, Resource] = {}
+
+        for asgn in assignments:
+            tv = tv_by_task.get(str(asgn.task_id))
+            if tv is None:
+                continue
+
+            resource = asgn.resource
+            resources_seen[resource.id] = resource
+
+            cap_per_day = resource.capacity_hours_per_day      # Decimal
+            units_frac  = asgn.units_percent / Decimal("100")  # e.g. 0.5 for 50 %
+
+            # Daily allocated hours from this assignment
+            hours_per_working_day = cap_per_day * units_frac
+
+            task_start  = tv.planned_start.date()
+            task_finish = tv.planned_finish.date()
+
+            # Clip to window
+            eff_start = max(task_start,  window_start)
+            eff_end   = min(task_finish, window_end)
+            if eff_start > eff_end:
+                continue
+
+            for d in _date_range(eff_start, eff_end):
+                if d.weekday() >= 5:        # skip weekends (simple rule)
+                    continue
+                bk = _bucket_key(d, granularity)
+                resource_load[resource.id][bk]["allocated_hours"] += hours_per_working_day
+                # Track which tasks contributed (deduplicate per bucket later)
+                resource_load[resource.id][bk]["tasks"].append({
+                    "task_id": str(asgn.task_id),
+                    "title": tv.title,
+                    "hours_per_day": float(round(hours_per_working_day, 2)),
+                })
+
+        # ── 7. Deduplicate task entries per bucket ────────────────────────
+        for rid in resource_load:
+            for bk in resource_load[rid]:
+                seen_tasks: dict[str, float] = {}
+                for t in resource_load[rid][bk]["tasks"]:
+                    tid = t["task_id"]
+                    seen_tasks[tid] = seen_tasks.get(tid, 0) + t["hours_per_day"]
+                resource_load[rid][bk]["tasks"] = [
+                    {"task_id": tid, "title": next(
+                        t["title"] for t in resource_load[rid][bk]["tasks"] if t["task_id"] == tid
+                    ), "hours": round(hrs, 2)}
+                    for tid, hrs in seen_tasks.items()
+                ]
+
+        # ── 8. Assemble response ──────────────────────────────────────────
+        result_resources = []
+
+        # Also include resources that have NO assignments (capacity still useful)
+        all_resources = Resource.objects.filter(project=revision.project)
+        for res in all_resources:
+            resources_seen.setdefault(res.id, res)
+
+        for res in resources_seen.values():
+            cap_per_day = float(res.capacity_hours_per_day)
+            load_buckets = []
+
+            for bk in ordered_buckets:
+                working_days = _working_days_in_bucket(bucket_dates[bk])
+                bucket_capacity = cap_per_day * working_days
+
+                allocated = float(resource_load[res.id][bk]["allocated_hours"])
+                load_pct  = (allocated / bucket_capacity * 100) if bucket_capacity > 0 else 0.0
+
+                if load_pct <= 0:
+                    st = "idle"
+                elif load_pct < self.UNDERLOAD_THRESHOLD:
+                    st = "underload"
+                elif load_pct <= self.OVERLOAD_THRESHOLD:
+                    st = "optimum"
+                else:
+                    st = "overload"
+
+                load_buckets.append({
+                    "bucket":           bk,
+                    "allocated_hours":  round(allocated, 2),
+                    "capacity_hours":   round(bucket_capacity, 2),
+                    "load_percent":     round(load_pct, 1),
+                    "status":           st,
+                    "tasks":            resource_load[res.id][bk]["tasks"],
+                })
+
+            result_resources.append({
+                "id":                    res.id,
+                "name":                  res.name,
+                "capacity_hours_per_day": cap_per_day,
+                "user_id":               res.user_id,
+                "load":                  load_buckets,
+            })
+
+        # Sort resources: most overloaded first
+        result_resources.sort(
+            key=lambda r: -max((b["load_percent"] for b in r["load"]), default=0)
+        )
+
+        return Response({
+            "revision_id":    str(revision_id),
+            "granularity":    granularity,
+            "buckets":        ordered_buckets,
+            "bucket_labels":  [_bucket_label(b, granularity) for b in ordered_buckets],
+            "resources":      result_resources,
+        })

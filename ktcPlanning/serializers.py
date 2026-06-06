@@ -19,13 +19,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 class RevisionSerializer(serializers.ModelSerializer):
     projectId = serializers.PrimaryKeyRelatedField(source='project', read_only=True)
     projectStart = serializers.DateTimeField(source='project_start', format="%Y-%m-%d")
+    projectEnd = serializers.DateTimeField(source='project_end', format="%Y-%m-%d")
     createdAt = serializers.DateTimeField(source='created_at', format="%Y-%m-%dT%H:%M:%S")
     approvedAt = serializers.DateTimeField(source='approved_at', format="%Y-%m-%dT%H:%M:%S")
     isBaseline = serializers.BooleanField(source='is_baseline')
 
     class Meta:
         model = Revision
-        fields = ['id', 'projectId', 'number', 'description', 'projectStart', 'createdAt','approvedAt', 'isBaseline']
+        fields = ['id', 'projectId', 'number', 'description', 'projectStart','projectEnd', 'createdAt','approvedAt', 'isBaseline']
 
 
 class WbsNodeSerializer(serializers.ModelSerializer):

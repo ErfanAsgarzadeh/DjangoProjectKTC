@@ -2,6 +2,8 @@ import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from mptt.models import MPTTModel
 from mptt.fields import TreeForeignKey
 
@@ -17,7 +19,8 @@ class Project(models.Model):
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return self.name
 
@@ -80,13 +83,25 @@ class Revision(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     project_start=models.DateTimeField()
+    project_end = models.DateTimeField(null=True, blank=True)
     class Meta:
         unique_together = [("project", "number")]
 
     def __str__(self):
         return f"Rev {self.number} - {self.project.name}"
 
-
+@receiver(post_save, sender=Project)
+def create_revision_zero(sender, instance, created, **kwargs):
+    if created:
+        # اگر پروژه جدید ایجاد شد، سیستم به صورت خودکار ریویژن شماره 0 را می‌سازد
+        Revision.objects.create(
+            project=instance,
+            number=0,
+            description="Initial Automatic Base Version (Rev 0)",
+            is_baseline=True, # این را به عنوان اولین بیس‌لاین پیش‌فرض قرار می‌دهیم
+            created_by=instance.created_by,
+            project_start=instance.start_date if instance.start_date else instance.created_at
+        )
 # =========================================================
 # 4. WBS (TREE STRUCTURE)
 # =========================================================
@@ -227,35 +242,349 @@ class TaskScheduleMetrics(models.Model):
 # 9. RESOURCE MODEL
 #    - Resource به User وصل شد (اختیاری — می‌تواند منبع غیرانسانی هم باشد)
 # =========================================================
-
-class Resource(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="resources")
+class ResourcePool(models.Model):
     name = models.CharField(max_length=255)
-    # اگر منبع یک کاربر سیستم است، اینجا لینک می‌شود
-    user = models.ForeignKey(
-        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="resources"
+
+    description = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class ResourceRole(models.Model):
+
+    name = models.CharField(
+        max_length=255,
+        unique=True
     )
-    capacity_hours_per_day = models.DecimalField(max_digits=5, decimal_places=2, default=8)
+
+    description = models.TextField(blank=True)
 
     def __str__(self):
         return self.name
 
 
-class Assignment(models.Model):
-    """
-    اختصاص منابع به تسک در یک revision مشخص.
-    عمداً روی Task است نه TaskVersion تا بتوان در resource leveling
-    از آن استفاده کرد — اما با revision نسخه‌بندی می‌شود.
-    """
-    revision = models.ForeignKey(Revision, on_delete=models.CASCADE, related_name="assignments")
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="assignments")
-    resource = models.ForeignKey(Resource, on_delete=models.CASCADE)
-    units_percent = models.DecimalField(max_digits=5, decimal_places=2, default=100)
+
+class ResourceSkill(models.Model):
+
+    name = models.CharField(
+        max_length=255,
+        unique=True
+    )
+
+    def __str__(self):
+        return self.name
+
+
+class Resource(models.Model):
+
+    LABOR = "LABOR"
+    EQUIPMENT = "EQUIPMENT"
+    MATERIAL = "MATERIAL"
+    COST = "COST"
+
+    RESOURCE_TYPES = [
+        (LABOR, "Labor"),
+        (EQUIPMENT, "Equipment"),
+        (MATERIAL, "Material"),
+        (COST, "Cost"),
+    ]
+
+    pool = models.ForeignKey(
+        ResourcePool,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="resources"
+    )
+
+    code = models.CharField(
+        max_length=50,
+        null=True,
+        unique=True
+    )
+
+    name = models.CharField(
+        max_length=255
+    )
+
+    resource_type = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        choices=RESOURCE_TYPES
+    )
+
+    role = models.ForeignKey(
+        ResourceRole,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
+
+    calendar = models.ForeignKey(
+        Calendar,
+        null=True, blank=True,
+        on_delete=models.PROTECT
+    )
+
+    max_units = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=100
+    )
+
+    priority = models.IntegerField(
+        default=100
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return self.name
+
+
+class ResourceSkillMapping(models.Model):
+
+    resource = models.ForeignKey(
+        Resource,
+        on_delete=models.CASCADE,
+        related_name="skills"
+    )
+
+    skill = models.ForeignKey(
+        ResourceSkill,
+        on_delete=models.CASCADE
+    )
+
+    level = models.IntegerField(default=1)
 
     class Meta:
-        unique_together = [("revision", "task", "resource")]
+        unique_together = [
+            ("resource", "skill")
+        ]
 
 
+class ResourceException(models.Model):
+
+    resource = models.ForeignKey(
+        Resource,
+        on_delete=models.CASCADE,
+        related_name="exceptions"
+    )
+
+    start_datetime = models.DateTimeField()
+
+    finish_datetime = models.DateTimeField()
+
+    reason = models.CharField(
+        max_length=255
+    )
+
+    is_available = models.BooleanField(
+        default=False
+    )
+
+class ResourceRate(models.Model):
+
+    resource = models.ForeignKey(
+        Resource,
+        on_delete=models.CASCADE,
+        related_name="rates"
+    )
+
+    effective_from = models.DateField()
+
+    regular_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=2
+    )
+
+    overtime_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    class Meta:
+        ordering = ["effective_from"]
+
+class RoleRequirement(models.Model):
+
+    revision = models.ForeignKey(
+        Revision,
+        on_delete=models.CASCADE
+    )
+
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE
+    )
+
+    role = models.ForeignKey(
+        ResourceRole,
+        on_delete=models.CASCADE
+    )
+
+    units_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2
+    )
+
+    required_count = models.IntegerField(
+        default=1
+    )
+
+class SkillRequirement(models.Model):
+
+    revision = models.ForeignKey(
+        Revision,
+        on_delete=models.CASCADE
+    )
+
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE
+    )
+
+    skill = models.ForeignKey(
+        ResourceSkill,
+        on_delete=models.CASCADE
+    )
+
+    minimum_level = models.IntegerField(
+        default=1
+    )
+
+class Assignment(models.Model):
+
+    revision = models.ForeignKey(
+        Revision,
+        on_delete=models.CASCADE
+    )
+
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE
+    )
+
+    resource = models.ForeignKey(
+        Resource,
+        on_delete=models.CASCADE
+    )
+
+    units_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=100
+    )
+
+    planned_hours = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    actual_hours = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+
+    class Meta:
+        unique_together = [
+            (
+                "revision",
+                "task",
+                "resource"
+            )
+        ]
+
+class GlobalLevelingRun(models.Model):
+    """ذخیره کانتکست اجرای یک تسطیح منابع سراسری روی چندین پروژه"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    executed_at = models.DateTimeField(auto_now_add=True)
+    executed_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    description = models.TextField(blank=True)
+
+    # پروژه‌هایی که در این اجرای سراسری شرکت داده شده‌اند
+    participating_projects = models.ManyToManyField(Project, related_name="leveling_runs")
+
+    # وضعیت لولینگ: در حد پیش‌نویس/شبیه‌سازی است یا روی برنامه‌ها اعمال نهایی شده؟
+    is_committed = models.BooleanField(default=False, verbose_name="اعمال نهایی شده روی برنامه اصلی")
+
+    def __str__(self):
+        return f"Run {self.id} - {self.executed_at.date()}"
+
+
+class TaskLevelingMetrics(models.Model):
+    """ذخیره تاریخ‌های پیشنهادی تسطیح، بدون دستکاری لایه اصلی TaskVersion"""
+    leveling_run = models.ForeignKey(
+        GlobalLevelingRun, on_delete=models.CASCADE, related_name="task_metrics"
+    )
+    task_version = models.ForeignKey(
+        TaskVersion, on_delete=models.CASCADE, related_name="leveling_metrics"
+    )
+
+    # تاریخ‌های پیشنهادی موتور تسطیح (تداخل‌ها در این تاریخ‌ها حل شده‌اند)
+    leveled_start = models.DateTimeField()
+    leveled_finish = models.DateTimeField()
+
+    # میزان تاخیری که لولینگ به خاطر کمبود منبع به تسک تحمیل کرده است (بر حسب ساعت)
+    leveling_delay_hours = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        unique_together = [("leveling_run", "task_version")]
+
+
+
+class ResourceUsage(models.Model):
+    leveling_run = models.ForeignKey(
+        GlobalLevelingRun, on_delete=models.CASCADE, related_name="resource_usages", null=True, blank=True
+    )
+    revision = models.ForeignKey(
+        Revision,
+        on_delete=models.CASCADE
+    )
+
+    resource = models.ForeignKey(
+        Resource,
+        on_delete=models.CASCADE
+    )
+
+    usage_date = models.DateField()
+
+    planned_hours = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    actual_hours = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    remaining_capacity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    class Meta:
+        unique_together = [
+            (
+                "revision",
+                "resource",
+                "usage_date"
+            )
+        ]
 # =========================================================
 # 10. TASK ROLE — نقش افراد روی تسک (جدید)
 #     هم نسخه‌بندی‌شده (per revision) و هم به User وصل است
@@ -400,3 +729,8 @@ class TaskChatMessage(models.Model):
 
     def __str__(self):
         return f"Message by {self.user} on {self.task}"
+
+
+# =========================================================
+# مدل‌های جدید برای لایه تسطیح چندپروژه‌ای (Multi-Project Leveling Layer)
+# =========================================================
