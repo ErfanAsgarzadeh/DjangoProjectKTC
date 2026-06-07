@@ -90,8 +90,8 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     parentId = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
 
-    startDate = serializers.DateTimeField(source='planned_start', format="%Y-%m-%d", allow_null=True)
-    endDate = serializers.DateTimeField(source='planned_finish', format="%Y-%m-%d", allow_null=True)
+    startDate = serializers.DateTimeField(source='planned_start', format="%Y-%m-%d %H:%M:%S", allow_null=True)
+    endDate = serializers.DateTimeField(source='planned_finish', format="%Y-%m-%d %H:%M:%S", allow_null=True)
 
     # تغییر مهم: فیلد duration حالا می‌تواند از فرانت‌اند دریافت شود
     duration = serializers.FloatField(required=False, write_only=True)
@@ -116,13 +116,13 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     # --- تبدیل دیتا هنگام ارسال به فرانت‌اند (ساعت به روز) ---
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data['duration'] = float(instance.duration_hours) / 8.0 if instance.duration_hours else 0
+        data['duration'] = float(instance.duration_hours)  if instance.duration_hours else 0
         return data
 
     # --- تبدیل دیتا هنگام دریافت از فرانت‌اند (روز به ساعت) ---
     def validate(self, attrs):
         if 'duration' in attrs:
-            attrs['duration_hours'] = attrs.pop('duration') * 8.0
+            attrs['duration_hours'] = attrs.pop('duration')
         elif not self.instance:  # اگر ساخت تسک جدید بود و مقداری نیامد
             attrs['duration_hours'] = 40.0  # دیفالت 5 روز
         return attrs
@@ -233,3 +233,84 @@ class TaskChatMessageSerializer(serializers.ModelSerializer):
             'user' # بک‌اند خودش این را ست می‌کند
         ]
 
+
+class ResourcePoolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResourcePool
+        fields = '__all__'
+
+class ResourceRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResourceRole
+        fields = '__all__'
+
+class ResourceSkillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResourceSkill
+        fields = '__all__'
+
+class ResourceSerializer(serializers.ModelSerializer):
+    # برای اینکه اسم فیلدها در فرانت‌اند راحت‌تر مپ شود
+    resourceType = serializers.CharField(source='resource_type', required=False)
+    poolId = serializers.PrimaryKeyRelatedField(source='pool', queryset=ResourcePool.objects.all(), required=False, allow_null=True)
+    roleId = serializers.PrimaryKeyRelatedField(source='role', queryset=ResourceRole.objects.all(), required=False, allow_null=True)
+    maxUnits = serializers.DecimalField(source='max_units', max_digits=10, decimal_places=2, required=False)
+    isActive = serializers.BooleanField(source='is_active', required=False)
+
+    class Meta:
+        model = Resource
+        fields = [
+            'id', 'code', 'name', 'resource_type', 'pool', 'role',
+            'max_units', 'priority', 'is_active',
+            # فیلدهای هم‌نام برای فرانت‌اند:
+            'resourceType', 'poolId', 'roleId', 'maxUnits', 'isActive'
+        ]
+
+class ResourceSkillMappingSerializer(serializers.ModelSerializer):
+    resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
+    skillId = serializers.PrimaryKeyRelatedField(source='skill', queryset=ResourceSkill.objects.all())
+
+    class Meta:
+        model = ResourceSkillMapping
+        fields = ['id', 'resource', 'skill', 'level', 'resourceId', 'skillId']
+
+class ResourceExceptionSerializer(serializers.ModelSerializer):
+    resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
+    startDatetime = serializers.DateTimeField(source='start_datetime')
+    finishDatetime = serializers.DateTimeField(source='finish_datetime')
+    isAvailable = serializers.BooleanField(source='is_available')
+
+    class Meta:
+        model = ResourceException
+        fields = [
+            'id', 'resource', 'start_datetime', 'finish_datetime', 'reason', 'is_available',
+            'resourceId', 'startDatetime', 'finishDatetime', 'isAvailable'
+        ]
+
+class ResourceRateSerializer(serializers.ModelSerializer):
+    resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
+    effectiveFrom = serializers.DateField(source='effective_from')
+    regularRate = serializers.DecimalField(source='regular_rate', max_digits=10, decimal_places=2)
+    overtimeRate = serializers.DecimalField(source='overtime_rate', max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = ResourceRate
+        fields = [
+            'id', 'resource', 'effective_from', 'regular_rate', 'overtime_rate',
+            'resourceId', 'effectiveFrom', 'regularRate', 'overtimeRate'
+        ]
+
+class AssignmentSerializer(serializers.ModelSerializer):
+    taskId = serializers.UUIDField(source='task.id', read_only=True)
+    resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
+    revisionId = serializers.PrimaryKeyRelatedField(source='revision', read_only=True)
+    unitsPercent = serializers.DecimalField(source='units_percent', max_digits=5, decimal_places=2)
+    plannedHours = serializers.DecimalField(source='planned_hours', max_digits=10, decimal_places=2)
+    actualHours = serializers.DecimalField(source='actual_hours', max_digits=10, decimal_places=2)
+
+    class Meta:
+        model = Assignment
+        fields = [
+            'id', 'revision', 'task', 'resource', 'units_percent', 'planned_hours', 'actual_hours',
+            'taskId', 'resourceId', 'revisionId', 'unitsPercent', 'plannedHours', 'actualHours'
+        ]

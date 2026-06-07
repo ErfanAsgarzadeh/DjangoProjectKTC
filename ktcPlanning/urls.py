@@ -5,7 +5,9 @@ from .views import (
     RevisionViewSet,
     WbsNodeViewSet,
     ActivityNodeViewSet,
-    DependencyViewSet, TaskReportLogViewSet, TaskChatMessageViewSet, TaskRoleViewSet, ResourceHistogramView
+    DependencyViewSet, TaskReportLogViewSet, TaskChatMessageViewSet, TaskRoleViewSet, ResourceHistogramView,
+    ImportMSPView, ResourcePoolViewSet, AssignmentViewSet, ResourceRateViewSet, ResourceExceptionViewSet,
+    ResourceSkillMappingViewSet, ResourceViewSet, ResourceSkillViewSet, ResourceRoleViewSet
 )
 
 # ایجاد یک نمونه از روتور پیش‌فرض DRF
@@ -19,10 +21,18 @@ router.register(r'activities', ActivityNodeViewSet, basename='activity')
 router.register(r'dependencies', DependencyViewSet, basename='dependency')
 router.register(r'task-reports', TaskReportLogViewSet, basename='task-report')
 router.register(r'task-chats', TaskChatMessageViewSet, basename='task-chat')
-router.register(r'task-roles', TaskRoleViewSet, basename='task-role') # ثبت مسیر نقش‌ها
+router.register(r'task-roles', TaskRoleViewSet, basename='task-role')
+
+router.register(r'resource-pools', ResourcePoolViewSet, basename='resource-pool')
+router.register(r'resource-roles', ResourceRoleViewSet, basename='resource-role')
+router.register(r'resource-skills', ResourceSkillViewSet, basename='resource-skill')
+router.register(r'resources', ResourceViewSet, basename='resource')
+router.register(r'resource-skill-mappings', ResourceSkillMappingViewSet, basename='resource-skill-mapping')
+router.register(r'resource-exceptions', ResourceExceptionViewSet, basename='resource-exception')
+router.register(r'resource-rates', ResourceRateViewSet, basename='resource-rate')
+router.register(r'assignments', AssignmentViewSet, basename='assignment')
 # مسیرهای نهایی اپلیکیشن
 urlpatterns = [
     path('', include(router.urls)),
-    path('planning/revisions/<uuid:revision_id>/resource-histogram/',
-         ResourceHistogramView.as_view(), name='resource-histogram'),
+    path("import-msp/", ImportMSPView.as_view(), name="import-msp"),
 ]

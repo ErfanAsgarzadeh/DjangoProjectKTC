@@ -15,16 +15,21 @@ from rest_framework.views import APIView
 from .cpm import run_cpm
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
-    TaskActual, TaskChatMessage, Assignment, Resource
+    TaskActual, TaskChatMessage, Assignment, Resource, ResourcePool, ResourceRole, ResourceSkill, ResourceSkillMapping, \
+    ResourceException, ResourceRate
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
     WbsNodeSerializer,
     ActivityNodeSerializer,
     DependencySerializer,
-    TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer
+    TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer, ResourcePoolSerializer,
+    ResourceRoleSerializer, ResourceSkillSerializer, ResourceSerializer, ResourceSkillMappingSerializer,
+    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer
 )
+from rest_framework.parsers import MultiPartParser, FormParser
 
+from .msp_importer import import_msp_xml
 from django.db.models import Max
 def check_revision_is_open(revision):
     if revision.approved_at is not None:
@@ -760,3 +765,87 @@ class ResourceHistogramView(APIView):
             "bucket_labels":  [_bucket_label(b, granularity) for b in ordered_buckets],
             "resources":      result_resources,
         })
+
+
+
+
+class ImportMSPView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes     = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        xml_file     = request.FILES.get("file")
+        project_name = request.data.get("project_name") or None
+
+        if not xml_file:
+            return Response({"error": "No file provided."}, status=400)
+
+        if not xml_file.name.lower().endswith(".xml"):
+            return Response({"error": "File must be a .xml export from MS Project."}, status=400)
+
+        try:
+            result = import_msp_xml(
+                xml_file=xml_file,
+                project_name=project_name,
+                user=request.user,
+            )
+        except Exception as exc:
+            return Response(
+                {"error": "Import failed.", "detail": str(exc)},
+                status=500,
+            )
+
+        return Response(result, status=200)
+
+
+class ResourcePoolViewSet(viewsets.ModelViewSet):
+    queryset = ResourcePool.objects.all()
+    serializer_class = ResourcePoolSerializer
+    permission_classes = [IsAuthenticated]
+
+class ResourceRoleViewSet(viewsets.ModelViewSet):
+    queryset = ResourceRole.objects.all()
+    serializer_class = ResourceRoleSerializer
+    permission_classes = [IsAuthenticated]
+
+class ResourceSkillViewSet(viewsets.ModelViewSet):
+    queryset = ResourceSkill.objects.all()
+    serializer_class = ResourceSkillSerializer
+    permission_classes = [IsAuthenticated]
+
+class ResourceViewSet(viewsets.ModelViewSet):
+    queryset = Resource.objects.all()
+    serializer_class = ResourceSerializer
+    permission_classes = [IsAuthenticated]
+
+class ResourceSkillMappingViewSet(viewsets.ModelViewSet):
+    queryset = ResourceSkillMapping.objects.all()
+    serializer_class = ResourceSkillMappingSerializer
+    permission_classes = [IsAuthenticated]
+
+class ResourceExceptionViewSet(viewsets.ModelViewSet):
+    queryset = ResourceException.objects.all()
+    serializer_class = ResourceExceptionSerializer
+    permission_classes = [IsAuthenticated]
+
+class ResourceRateViewSet(viewsets.ModelViewSet):
+    queryset = ResourceRate.objects.all()
+    serializer_class = ResourceRateSerializer
+    permission_classes = [IsAuthenticated]
+
+class AssignmentViewSet(viewsets.ModelViewSet):
+    queryset = Assignment.objects.all()
+    serializer_class = AssignmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        فیلتر کردن Assignment ها بر اساس ریویژن (Revision)
+        این متد باعث می‌شود وقتی فرانت‌اند `?revision_id=xxx` را می‌فرستد،
+        فقط رکوردهای همان نسخه برگشت داده شود.
+        """
+        queryset = super().get_queryset()
+        revision_id = self.request.query_params.get('revision_id')
+        if revision_id:
+            queryset = queryset.filter(revision_id=revision_id)
+        return queryset
