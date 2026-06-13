@@ -1,3 +1,5 @@
+from os import name
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,9 +40,13 @@ def check_revision_is_open(revision):
 
 class ProjectViewSet(viewsets.ModelViewSet):
     """مدیریت پروژه‌ها"""
-    queryset = Project.objects.all()
+    queryset = Project.objects.filter(is_deleted=False).exclude(name='System-Personal-Tasks')
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        instance.is_deleted = True
+        instance.save()
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -48,7 +54,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
 class RevisionViewSet(viewsets.ModelViewSet):
     """مدیریت نسخه‌ها (Revisions) با قابلیت فیلتر بر اساس پروژه"""
-    queryset = Revision.objects.all().order_by('-number')
+    queryset = Revision.objects.filter(is_deleted=False ).order_by('-number')
     serializer_class = RevisionSerializer
     permission_classes = [IsAuthenticated]
 
@@ -59,6 +65,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(project_id=project_id)
         return queryset
 
+    def perform_destroy(self, instance):
+        instance.is_deleted = True
+        instance.save()
     # --- متد قفل کردن نسخه ---
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_revision(self, request, pk=None):
@@ -495,8 +504,8 @@ class TaskRoleViewSet(viewsets.ModelViewSet):
 
         # امکان فیلتر کردن دیتای برگشتی
         revision_id = self.request.query_params.get('revision_id')
-        task_id = self.request.query_params.get('task_id')
-        user_id = self.request.query_params.get('user_id')
+        task_id = self.request.query_params.get('taskId')
+        user_id = self.request.query_params.get('userId')
 
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
@@ -767,28 +776,28 @@ class ResourceHistogramView(APIView):
         })
 
 
-
-
 class ImportMSPView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes     = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        xml_file     = request.FILES.get("file")
-        project_name = request.data.get("project_name") or None
-
+        xml_file = request.FILES.get("file")
+        # دریافت project_id و revision_id از درخواست
+        project_id = request.data.get("project_id")
+        revision_id = request.data.get("revision_id")
+        active_node_id = request.data.get('active_node_id')
         if not xml_file:
             return Response({"error": "No file provided."}, status=400)
+
+        if not project_id or not revision_id:
+            return Response({"error": "project_id and revision_id are required."}, status=400)
 
         if not xml_file.name.lower().endswith(".xml"):
             return Response({"error": "File must be a .xml export from MS Project."}, status=400)
 
         try:
-            result = import_msp_xml(
-                xml_file=xml_file,
-                project_name=project_name,
-                user=request.user,
-            )
+            # فراخوانی تابع اصلاح شده در msp_importer.py
+            result = import_msp_xml(xml_file, project_id, revision_id, active_node_id=active_node_id)
         except Exception as exc:
             return Response(
                 {"error": "Import failed.", "detail": str(exc)},
@@ -796,8 +805,6 @@ class ImportMSPView(APIView):
             )
 
         return Response(result, status=200)
-
-
 class ResourcePoolViewSet(viewsets.ModelViewSet):
     queryset = ResourcePool.objects.all()
     serializer_class = ResourcePoolSerializer
@@ -849,3 +856,170 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
         return queryset
+
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
+class PersonalTaskViewSet(viewsets.ViewSet):
+    """
+    مدیریت تسک‌های شخصی کاربران که به عنوان یک پروژه سیستمی در بک‌اند ثبت می‌شوند.
+    """
+    permission_classes = [IsAuthenticated]
+
+    # متد GET برای گرفتن لیست تسک‌های شخصی از سمت فرانت‌اند
+    def list(self, request):
+        sys_project = Project.objects.filter(name="System-Personal-Tasks").first()
+        if not sys_project:
+            # اگر پروژه هنوز ساخته نشده، یعنی کاربر هنوز تسکی ایجاد نکرده است
+            return Response([], status=status.HTTP_200_OK)
+
+        # پیدا کردن ریویژن فعال و تمام تسک‌هایی که حذف نشده‌اند
+        revision = Revision.objects.filter(project=sys_project).latest('created_at')
+        tasks = TaskVersion.objects.filter(revision=revision, is_deleted=False)
+
+        # استفاده از سریالایزر گانت‌چارت برای همخوانی ساختار دیتا با فرانت‌اند
+        serializer = ActivityNodeSerializer(tasks, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # متد POST برای ایجاد تسک شخصی جدید
+    @action(detail=False, methods=['post'], url_path='create')
+    @transaction.atomic
+    def create_personal_task(self, request):
+        title = request.data.get('title')
+        start_date = request.data.get('start_date')
+        duration_hours = request.data.get('duration_hours')
+        description = request.data.get('description')
+        user_id = request.data.get('user_id')
+        current_id = (request.data.get('current_user')).get('id')
+
+        if not all([title, start_date, duration_hours, user_id]):
+            return Response({"detail": "تمامی فیلدها (عنوان، تاریخ، مدت‌زمان و کاربر) الزامی است."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # ۱. ساخت یا دریافت پروژه سیستمی
+        sys_project, created = Project.objects.get_or_create(
+            name="System-Personal-Tasks",
+            defaults={'created_by': request.user}
+        )
+
+        # ۲. دریافت ریویژن (طبق مدل‌های شما، ریویژن صفر خودکار با ساخت پروژه ایجاد می‌شود)
+        revision = Revision.objects.filter(project=sys_project).latest('created_at')
+
+        # ۳. مدیریت ساختار WBS برای تسک‌های شخصی
+        # مدل WBSNode فیلد نام ندارد، نام در WBSNodeVersion ذخیره می‌شود
+        wbs_node_version = WBSNodeVersion.objects.filter(revision=revision, title="My Personal Tasks").first()
+
+        if not wbs_node_version:
+            # پیدا کردن گره ریشه که با سیگنال ایجاد شده
+            root_wbs = WBSNodeVersion.objects.get(revision=revision, parent__isnull=True)
+
+            # ساخت گره WBS فرزند برای کارهای شخصی
+            base_node = WBSNode.objects.create(project=sys_project)
+            wbs_node_version = WBSNodeVersion.objects.create(
+                node=base_node,
+                revision=revision,
+                parent=root_wbs,
+                title="My Personal Tasks",
+                sequence=1
+            )
+
+        # ۴. ساخت تسک فیزیکی و نسخه آن
+        task = Task.objects.create(project=sys_project)
+
+        task_ver = TaskVersion.objects.create(
+            task=task,
+            revision=revision,
+            wbs_node=wbs_node_version,
+            title=title,
+            planned_start=start_date,
+            duration_hours=duration_hours,
+            description=description,
+        )
+
+        # ۵. ایجاد نقش مجری
+        # این کار باعث می‌شود سیگنالی که در signals.py دارید، فوراً کاربر را به جدول Assignment
+        # اضافه کند تا برای لولینگ آماده شود.
+        user = User.objects.get(id=user_id)
+        current=User.objects.get(id=current_id)
+        TaskRole.objects.create(
+            revision=revision,
+            task=task,
+            user=user,
+            role='executor'
+        )
+        TaskRole.objects.create(
+            revision=revision,
+            task=task,
+            user=current,
+            role='reviewer'
+        )
+
+
+        # ۶. بازگرداندن دیتای تسک با فرمت استاندارد برای نمایش سریع در لیست فرانت‌اند
+        serializer = ActivityNodeSerializer(task_ver)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    # متد DELETE برای لغو یا پاک کردن تسک شخصی
+    def destroy(self, request, pk=None):
+        try:
+            task_ver = TaskVersion.objects.get(task__id=pk)
+
+            # استفاده از ویژگی Soft Delete که در سیستم شما پیاده‌سازی شده است
+            task_ver.is_deleted = True
+            task_ver.save()
+
+            # حذف نقش کاربر تا سیگنال remove_executor_assignment در signals.py
+            # تریگر شود و منبع را از Assignment پاک کند، تا ظرفیت آزاد شود.
+            TaskRole.objects.filter(task__id=pk).delete()
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except TaskVersion.DoesNotExist:
+            return Response({"detail": "تسک یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+
+    def partial_update(self, request, pk=None):
+        try:
+            # پیدا کردن تسک فعلی که حذف نشده باشد
+            task_ver = TaskVersion.objects.get(task__id=pk, is_deleted=False)
+
+            # دریافت فیلدهای ارسال شده از سمت کلاینت
+            title = request.data.get('title')
+            start_date = request.data.get('start_date')
+            duration_hours = request.data.get('duration_hours')
+            description = request.data.get('description')
+            user_id = request.data.get('user_id')
+
+            # اعمال تغییرات روی تسک (در صورت وجود هر فیلد در ریکوئست)
+            if title:
+                task_ver.title = title
+            if start_date:
+                task_ver.planned_start = start_date
+            if duration_hours:
+                task_ver.duration_hours = duration_hours
+            if description is not None:  # توضیحات می‌تواند خالی باشد
+                task_ver.description = description
+
+            task_ver.save()
+
+            # در صورتی که کاربر مجری تغییر کرده باشد، نقش او را آپدیت می‌کنیم
+            if user_id:
+                task_role = TaskRole.objects.filter(task=task_ver.task, role='executor').first()
+                if task_role:
+                    if str(task_role.user_id) != str(user_id):
+                        task_role.user_id = user_id
+                        task_role.save()
+                else:
+                    # اگر نقشی از قبل نبود، یکی می‌سازیم
+                    TaskRole.objects.create(
+                        revision=task_ver.revision,
+                        task=task_ver.task,
+                        user_id=user_id,
+                        role='executor'
+                    )
+
+            # استفاده از همان سریالایزری که در لیست و ساخت استفاده کردید
+            serializer = ActivityNodeSerializer(task_ver)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except TaskVersion.DoesNotExist:
+            return Response({"detail": "تسک یافت نشد."}, status=status.HTTP_404_NOT_FOUND)

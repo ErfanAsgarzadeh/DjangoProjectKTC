@@ -25,7 +25,7 @@ def sync_executor_to_assignment(sender, instance, created, **kwargs):
 
         # ۲. ایجاد یا پیدا کردن منبع
         display_name = f"{user.username} ({user.job_title})" if getattr(user, 'job_title', None) else user.username
-        resource_code = getattr(user, 'employee_code', None) or f"USR-{user.id}"
+        resource_code = user.id
 
         resource, _ = Resource.objects.get_or_create(
             code=resource_code,

@@ -7,10 +7,11 @@ from .models import *
 class ProjectSerializer(serializers.ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', format="%Y-%m-%dT%H:%M:%S", read_only=True)
     description = serializers.SerializerMethodField()
-
+    start_date = serializers.DateTimeField( format="%Y-%m-%d", required=False, allow_null=True)
+    end_date = serializers.DateTimeField( format="%Y-%m-%d", required=False, allow_null=True)
     class Meta:
         model = Project
-        fields = ['id', 'name', 'description', 'createdAt']
+        fields = ['id', 'name', 'description', 'createdAt','start_date','end_date']
 
     def get_description(self, obj):
         return ""
@@ -102,11 +103,12 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     constraintDate = serializers.SerializerMethodField()
     notes = serializers.SerializerMethodField()
     metrics = TaskScheduleMetricsSerializer(read_only=True, allow_null=True)
+    description=serializers.CharField(required=False)
     class Meta:
         model = TaskVersion
         fields = [
             'id', 'code', 'name', 'parentId', 'type', 'startDate', 'endDate',
-            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes','metrics'
+            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes','metrics','description'
         ]
 
     def get_parentId(self, obj):
@@ -140,7 +142,7 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
 
     def get_resources(self, obj):
         assignments = Assignment.objects.filter(task=obj.task, revision=obj.revision)
-        return [assign.resource.name for assign in assignments]
+        return [{'name':assign.resource.name , 'id':assign.resource.code} for assign in assignments]
 
     def get_constraintType(self, obj):
         return "ASAP"

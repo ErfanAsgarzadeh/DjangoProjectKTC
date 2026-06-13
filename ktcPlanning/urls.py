@@ -7,7 +7,7 @@ from .views import (
     ActivityNodeViewSet,
     DependencyViewSet, TaskReportLogViewSet, TaskChatMessageViewSet, TaskRoleViewSet, ResourceHistogramView,
     ImportMSPView, ResourcePoolViewSet, AssignmentViewSet, ResourceRateViewSet, ResourceExceptionViewSet,
-    ResourceSkillMappingViewSet, ResourceViewSet, ResourceSkillViewSet, ResourceRoleViewSet
+    ResourceSkillMappingViewSet, ResourceViewSet, ResourceSkillViewSet, ResourceRoleViewSet,PersonalTaskViewSet
 )
 
 # ایجاد یک نمونه از روتور پیش‌فرض DRF
@@ -31,8 +31,10 @@ router.register(r'resource-skill-mappings', ResourceSkillMappingViewSet, basenam
 router.register(r'resource-exceptions', ResourceExceptionViewSet, basename='resource-exception')
 router.register(r'resource-rates', ResourceRateViewSet, basename='resource-rate')
 router.register(r'assignments', AssignmentViewSet, basename='assignment')
+router.register(r'personal-tasks', PersonalTaskViewSet, basename='personal-tasks')
 # مسیرهای نهایی اپلیکیشن
 urlpatterns = [
     path('', include(router.urls)),
     path("import-msp/", ImportMSPView.as_view(), name="import-msp"),
+
 ]

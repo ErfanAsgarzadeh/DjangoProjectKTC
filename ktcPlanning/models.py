@@ -21,6 +21,7 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     def __str__(self):
         return self.name
 
@@ -84,24 +85,13 @@ class Revision(models.Model):
 
     project_start=models.DateTimeField()
     project_end = models.DateTimeField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     class Meta:
         unique_together = [("project", "number")]
 
     def __str__(self):
         return f"Rev {self.number} - {self.project.name}"
 
-@receiver(post_save, sender=Project)
-def create_revision_zero(sender, instance, created, **kwargs):
-    if created:
-        # اگر پروژه جدید ایجاد شد، سیستم به صورت خودکار ریویژن شماره 0 را می‌سازد
-        Revision.objects.create(
-            project=instance,
-            number=0,
-            description="Initial Automatic Base Version (Rev 0)",
-            is_baseline=True, # این را به عنوان اولین بیس‌لاین پیش‌فرض قرار می‌دهیم
-            created_by=instance.created_by,
-            project_start=instance.start_date if instance.start_date else instance.created_at
-        )
 # =========================================================
 # 4. WBS (TREE STRUCTURE)
 # =========================================================
@@ -155,12 +145,43 @@ class WBSNodeVersion(MPTTModel):
 # =========================================================
 # 5. TASK (IDENTITY ONLY)
 # =========================================================
+from django.apps import apps
+@receiver(post_save, sender=Project)
+def create_revision_zero(sender, instance, created, **kwargs):
+    if created:
+        # استفاده از get_model برای جلوگیری از ارجاع ناقص
+        Revision = apps.get_model('ktcPlanning', 'Revision')
+        WBSNode = apps.get_model('ktcPlanning', 'WBSNode')
+        WBSNodeVersion = apps.get_model('ktcPlanning', 'WBSNodeVersion')
+
+        # ۱. ایجاد Revision شماره 0
+        revision = Revision.objects.create(
+            project=instance,
+            number=0,
+            description="Initial Automatic Base Version (Rev 0)",
+            is_baseline=True,
+            created_by=instance.created_by,
+            project_start=instance.start_date if instance.start_date else instance.created_at,
+            project_end=instance.end_date if instance.end_date else instance.created_at
+        )
+
+        # ۲. ایجاد گره پایه WBS
+        base_wbs_node = WBSNode.objects.create(project=instance)
+
+        # ۳. ایجاد نسخه WBS برای Revision 0
+        WBSNodeVersion.objects.create(
+            node=base_wbs_node,
+            revision=revision,
+            title=f"Root: {instance.name}",
+            sequence=1
+        )
+
 
 class Task(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
     created_at = models.DateTimeField(auto_now_add=True)
-
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     def __str__(self):
         return str(self.id)
 
@@ -179,15 +200,16 @@ class TaskVersion(models.Model):
     planned_start = models.DateTimeField(null=True, blank=True)
     planned_finish = models.DateTimeField(null=True, blank=True)
     duration_hours = models.DecimalField(max_digits=10, decimal_places=2)
-
+    description=models.TextField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
-
+    sequence = models.IntegerField(default=0, help_text="ترتیب نمایش در گانت‌چارت")
     class Meta:
         unique_together = [("task", "revision")]
         indexes = [
             models.Index(fields=["revision", "wbs_node"]),
             models.Index(fields=["planned_start"]),
         ]
+        ordering = ['sequence']
 
     def clean(self):
         if  self.planned_start and self.planned_finish:
@@ -511,10 +533,8 @@ class GlobalLevelingRun(models.Model):
     executed_at = models.DateTimeField(auto_now_add=True)
     executed_by = models.ForeignKey(User, on_delete=models.PROTECT)
     description = models.TextField(blank=True)
-
     # پروژه‌هایی که در این اجرای سراسری شرکت داده شده‌اند
     participating_projects = models.ManyToManyField(Project, related_name="leveling_runs")
-
     # وضعیت لولینگ: در حد پیش‌نویس/شبیه‌سازی است یا روی برنامه‌ها اعمال نهایی شده؟
     is_committed = models.BooleanField(default=False, verbose_name="اعمال نهایی شده روی برنامه اصلی")
 
@@ -631,35 +651,46 @@ class TaskActual(models.Model):
             if self.actual_start >= self.actual_finish:
                 raise ValidationError("actual_start باید قبل از actual_finish باشد.")
 
-
 # =========================================================
-# 12. VARIANCE REPORT — انحراف از برنامه (جدید)
-#     توسط Celery شبانه یا on-demand محاسبه می‌شود
+# 12. VARIANCE REPORT — انحراف از برنامه (اصلاح شده)
 # =========================================================
 
 class VarianceReport(models.Model):
-    STATUS = [
-        ("on_track", "در برنامه"),
-        ("at_risk",  "در خطر"),
-        ("delayed",  "تاخیر دارد"),
-    ]
+    # اتصال مستقیم به Task برای حفظ تاریخچه در طول ریویژن‌های مختلف
+    task = models.ForeignKey('Task', on_delete=models.CASCADE, related_name="variance_snapshots")
+    revision = models.ForeignKey('Revision', on_delete=models.CASCADE, related_name="variances")
 
-    task_version = models.OneToOneField(
-        TaskVersion, on_delete=models.CASCADE, related_name="variance"
-    )
-    start_variance_hours = models.IntegerField(default=0)    # مثبت = دیرتر از برنامه
-    finish_variance_hours = models.IntegerField(default=0)   # مثبت = دیرتر از برنامه
-    duration_variance_hours = models.IntegerField(default=0)
-    spi = models.DecimalField(                               # Schedule Performance Index
-        max_digits=5, decimal_places=2, default=1
-    )
-    status = models.CharField(max_length=10, choices=STATUS, default="on_track")
-    computed_at = models.DateTimeField(auto_now=True)
+    # تاریخ محاسبه (Data Date)
+    report_date = models.DateField(auto_now_add=True)
+
+    # مقادیر پایه EVM (بر اساس ساعت)
+    budget_at_completion = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # BAC
+    planned_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)         # PV
+    earned_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)          # EV
+    actual_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)           # AC
+
+    # شاخص‌های عملکرد (Performance Indices)
+    spi = models.DecimalField(max_digits=5, decimal_places=2, default=1.00)
+    cpi = models.DecimalField(max_digits=5, decimal_places=2, default=1.00)
+
+    # انحراف‌ها (Variances)
+    schedule_variance = models.DecimalField(max_digits=15, decimal_places=2, default=0)     # SV = EV - PV
+    cost_variance = models.DecimalField(max_digits=15, decimal_places=2, default=0)         # CV = EV - AC
+
+    # پیش‌بینی‌ها (Forecasting)
+    estimate_at_completion = models.DecimalField(max_digits=15, decimal_places=2, default=0) # EAC
+    estimate_to_complete = models.DecimalField(max_digits=15, decimal_places=2, default=0)   # ETC
+    variance_at_completion = models.DecimalField(max_digits=15, decimal_places=2, default=0) # VAC
+
+    # فلگ عملیاتی (برای داشبورد "مدیریت بر مبنای استثنا")
+    action_required = models.BooleanField(default=False)
 
     class Meta:
-        indexes = [
-            models.Index(fields=["status"]),  # برای query سریع روی داشبورد
-        ]
+        unique_together = [("task", "report_date", "revision")]
+        ordering = ['-report_date']
+
+    def __str__(self):
+        return f"Variance for Task {self.task.id} on {self.report_date}"
 
 
 # =========================================================
