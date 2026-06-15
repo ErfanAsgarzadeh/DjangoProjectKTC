@@ -83,6 +83,7 @@ class TaskScheduleMetricsSerializer(serializers.ModelSerializer):
             'earlyStart', 'earlyFinish', 'lateStart', 'lateFinish',
             'totalFloatHours', 'freeFloatHours', 'isCritical'
         ]
+
 class ActivityNodeSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='task.id', read_only=True)
 
@@ -97,18 +98,19 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     # تغییر مهم: فیلد duration حالا می‌تواند از فرانت‌اند دریافت شود
     duration = serializers.FloatField(required=False, write_only=True)
 
-    progress = serializers.SerializerMethodField()
+    progress = serializers.FloatField(required=False)
     resources = serializers.SerializerMethodField()
     constraintType = serializers.SerializerMethodField()
     constraintDate = serializers.SerializerMethodField()
     notes = serializers.SerializerMethodField()
     metrics = TaskScheduleMetricsSerializer(read_only=True, allow_null=True)
     description=serializers.CharField(required=False)
+    weight = serializers.FloatField(required=False)
     class Meta:
         model = TaskVersion
         fields = [
             'id', 'code', 'name', 'parentId', 'type', 'startDate', 'endDate',
-            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes','metrics','description'
+            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes','metrics','description','weight'
         ]
 
     def get_parentId(self, obj):
@@ -116,11 +118,16 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
         # سپس UUID گره اصلی آن WBS را به فرانت‌اند می‌فرستیم
         return obj.wbs_node.node.id if obj.wbs_node else None
     # --- تبدیل دیتا هنگام ارسال به فرانت‌اند (ساعت به روز) ---
+
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data['duration'] = float(instance.duration_hours)  if instance.duration_hours else 0
-        return data
 
+        actual = getattr(instance, 'actual', None)
+        data['progress'] = float(actual.progress) if actual else 0
+
+        data['duration'] = float(instance.duration_hours) if instance.duration_hours else 0
+        return data
     # --- تبدیل دیتا هنگام دریافت از فرانت‌اند (روز به ساعت) ---
     def validate(self, attrs):
         if 'duration' in attrs:
@@ -142,7 +149,9 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
 
     def get_resources(self, obj):
         assignments = Assignment.objects.filter(task=obj.task, revision=obj.revision)
-        return [{'name':assign.resource.name , 'id':assign.resource.code} for assign in assignments]
+        # به جای برگرداندن یک آبجکت دارای نام و آیدی، فقط نام منابع را به صورت متن ساده برمی‌گردانیم
+        # خروجی به این شکل می‌شود: ['Ali', 'Crane', 'Excavator']
+        return [assign.resource.name for assign in assignments]
 
     def get_constraintType(self, obj):
         return "ASAP"
@@ -152,6 +161,24 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
 
     def get_notes(self, obj):
         return ""
+
+    def update(self, instance, validated_data):
+        progress = validated_data.pop('progress', None)
+
+        instance = super().update(instance, validated_data)
+
+        if progress is not None:
+            actual, _ = TaskActual.objects.get_or_create(
+                task_version=instance,
+                defaults={
+                    'updated_by': self.context['request'].user
+                }
+            )
+            actual.progress = progress
+            actual.updated_by = self.context['request'].user
+            actual.save()
+
+        return instance
 
 
 class DependencySerializer(serializers.ModelSerializer):
@@ -303,16 +330,40 @@ class ResourceRateSerializer(serializers.ModelSerializer):
         ]
 
 class AssignmentSerializer(serializers.ModelSerializer):
-    taskId = serializers.UUIDField(source='task.id', read_only=True)
+    taskId = serializers.PrimaryKeyRelatedField(source='task', queryset=Task.objects.all())
     resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
-    revisionId = serializers.PrimaryKeyRelatedField(source='revision', read_only=True)
-    unitsPercent = serializers.DecimalField(source='units_percent', max_digits=5, decimal_places=2)
-    plannedHours = serializers.DecimalField(source='planned_hours', max_digits=10, decimal_places=2)
-    actualHours = serializers.DecimalField(source='actual_hours', max_digits=10, decimal_places=2)
+    revisionId = serializers.PrimaryKeyRelatedField(source='revision', queryset=Revision.objects.all())
 
+    unitsPercent = serializers.DecimalField(source='units_percent', max_digits=5, decimal_places=2)
+    plannedHours = serializers.DecimalField(source='planned_hours', max_digits=10, decimal_places=2, required=False,default=0)
+    actualHours = serializers.DecimalField(source='actual_hours', max_digits=10, decimal_places=2, required=False,default=0)
     class Meta:
         model = Assignment
         fields = [
-            'id', 'revision', 'task', 'resource', 'units_percent', 'planned_hours', 'actual_hours',
-            'taskId', 'resourceId', 'revisionId', 'unitsPercent', 'plannedHours', 'actualHours'
+            'id',
+            'taskId',
+            'resourceId',
+            'revisionId',
+            'unitsPercent',
+            'plannedHours',
+            'actualHours'
         ]
+
+
+class VarianceReportSerializer(serializers.ModelSerializer):
+    task_name = serializers.SerializerMethodField()
+    task_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VarianceReport
+        fields = '__all__'
+
+    def get_task_name(self, obj):
+        # پیدا کردن عنوان تسک در همان ریویژنی که گزارش برای آن ثبت شده
+        tv = obj.task.versions.filter(revision=obj.revision).first()
+        return tv.title if tv else "تسک نامشخص"
+
+    def get_task_code(self, obj):
+        # استخراج کد WBS برای این تسک
+        tv = obj.task.versions.filter(revision=obj.revision).first()
+        return tv.wbs_node.wbs_code if (tv and hasattr(tv, 'wbs_node')) else "N/A"

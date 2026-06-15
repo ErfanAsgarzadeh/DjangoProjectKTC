@@ -196,7 +196,8 @@ class TaskVersion(models.Model):
     wbs_node = models.ForeignKey(WBSNodeVersion, on_delete=models.PROTECT)
     title = models.CharField(max_length=255)
     calendar = models.ForeignKey(Calendar, null=True, blank=True, on_delete=models.SET_NULL)
-
+    weight = models.DecimalField(max_digits=5, decimal_places=2, default=0.00,
+                                 help_text="وزن تسک در پروژه (درصد یا ضریب)")
     planned_start = models.DateTimeField(null=True, blank=True)
     planned_finish = models.DateTimeField(null=True, blank=True)
     duration_hours = models.DecimalField(max_digits=10, decimal_places=2)

@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-hkg4*npzvsfhxo_2&twus94%ju+b6#e2c59r-@g@87(5prnb4u
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'ktcPlanning.apps.KtcplanningConfig',
     'CustomUser.apps.CustomuserConfig',
-    'corsheaders'
+    'corsheaders',
+    "rest_framework_simplejwt.token_blacklist",
 
 ]
 
@@ -130,6 +131,7 @@ CORS_ALLOW_ALL_ORIGINS = False # برای امنیت بیشتر بهتر است 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://192.168.50.78:8000"
 ]
 
 # اجازه دادن به ارسال هدرهای احراز هویت (Token)
@@ -169,3 +171,5 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+APPEND_SLASH=False

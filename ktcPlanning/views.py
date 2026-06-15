@@ -14,11 +14,11 @@ from collections import defaultdict
 
 from rest_framework.views import APIView
 
-from .cpm import run_cpm
+from .cpm import CPMEngine
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
     TaskActual, TaskChatMessage, Assignment, Resource, ResourcePool, ResourceRole, ResourceSkill, ResourceSkillMapping, \
-    ResourceException, ResourceRate
+    ResourceException, ResourceRate, VarianceReport
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
@@ -27,12 +27,16 @@ from .serializers import (
     DependencySerializer,
     TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer, ResourcePoolSerializer,
     ResourceRoleSerializer, ResourceSkillSerializer, ResourceSerializer, ResourceSkillMappingSerializer,
-    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer
+    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer
 )
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from .msp_importer import import_msp_xml
 from django.db.models import Max
+
+from .variance_engine import EVMEngine
+
+
 def check_revision_is_open(revision):
     if revision.approved_at is not None:
         raise PermissionDenied("این نسخه قفل شده است و قابل تغییر نیست.")
@@ -155,7 +159,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
                     calendar=old_task.calendar,
                     planned_start=old_task.planned_start,
                     planned_finish=old_task.planned_finish,
-                    duration_hours=old_task.duration_hours
+                    duration_hours=old_task.duration_hours,
+                    weight=old_task.weight,
+                    description=old_task.description
                 )
             )
         TaskVersion.objects.bulk_create(new_tasks_to_create)
@@ -189,7 +195,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
 
         try:
             # اجرای موتور CPM که Early/Late start و finish ها را حساب و ذخیره می‌کند
-            cpm_result = run_cpm(revision)
+
+            engine = CPMEngine(revision)
+            cpm_result = engine.run()
 
             # پس از محاسبه، مستقیماً داده‌های آپدیت‌شده گانت‌چارت را استخراج کرده و برمی‌گردانیم
             # این کار باعث می‌شود فرانت‌اند نیاز به Request دوم نداشته باشد
@@ -300,7 +308,7 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
 
 
 class ActivityNodeViewSet(viewsets.ModelViewSet):
-    queryset = TaskVersion.objects.filter(is_deleted=False).select_related('metrics')
+    queryset = TaskVersion.objects.filter(is_deleted=False).select_related('metrics','actual')
     serializer_class = ActivityNodeSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'task__id'
@@ -1023,3 +1031,33 @@ class PersonalTaskViewSet(viewsets.ViewSet):
 
         except TaskVersion.DoesNotExist:
             return Response({"detail": "تسک یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class VarianceReportViewSet(viewsets.ModelViewSet):
+    """مدیریت گزارش‌های انحراف و اتصال به موتور EVM"""
+    queryset = VarianceReport.objects.all()
+    serializer_class = VarianceReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        revision_id = self.request.query_params.get('revision_id')
+        if revision_id:
+            queryset = queryset.filter(revision_id=revision_id)
+        return queryset
+
+    @action(detail=False, methods=['post'], url_path='calculate')
+    def trigger_calculation(self, request):
+        """اجرای دستی موتور محاسباتی برای یک پروژه"""
+        project_id = request.data.get('project_id')
+        if not project_id:
+            return Response({"error": "project_id الزامی است."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # اجرای انجین
+            engine = EVMEngine(project_id=project_id)
+            engine.run_task_level_variances()
+            return Response({"status": "محاسبات با موفقیت انجام شد و دیتابیس به‌روزرسانی گردید."},
+                            status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
