@@ -118,11 +118,19 @@ class RevisionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # دریافت و اعتبارسنجی توضیحات (اجباری)
+        description = request.data.get('description', '').strip()
+        if not description:
+            return Response(
+                {"detail": "وارد کردن توضیحات (دلیل ساخت پیش‌نویس) الزامی است."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         new_revision_number = Revision.objects.filter(project=base_revision.project).count() + 1
         new_revision = Revision.objects.create(
             project=base_revision.project,
             number=new_revision_number,
-            description=f"پیش‌نویس ساخته شده از روی نسخه {base_revision.number}",
+            description=description,
             project_start=base_revision.project_start,
             created_by=request.user
         )
