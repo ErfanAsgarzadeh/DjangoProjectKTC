@@ -244,12 +244,16 @@ class CPMEngine:
         return self._cal_engines.get(node.calendar_id, self._default_cal_engine)
 
     def _add_hours(self, node: TaskNode, start: datetime.datetime, hours: float) -> datetime.datetime:
+        if hours <= 0:
+            return start
         engine = self._get_engine(node)
         if engine:
             return engine.add_working_hours(start, hours)
         return start + datetime.timedelta(hours=hours)
 
     def _subtract_hours(self, node: TaskNode, end: datetime.datetime, hours: float) -> datetime.datetime:
+        if hours <= 0:
+            return end
         engine = self._get_engine(node)
         if engine:
             return engine.subtract_working_hours(end, hours)
@@ -259,16 +263,18 @@ class CPMEngine:
     # Dependency resolution (all 4 types)
     # ═══════════════════════════════════════
 
-    def _calc_es_from_edge(self, edge: EdgeInfo) -> datetime.datetime:
+    def _calc_es_from_edge(self, edge: EdgeInfo, anchor: datetime.datetime) -> datetime.datetime:
         """
         با توجه به نوع وابستگی، earliest start ممکن successor را بر اساس
         مقادیر forward pass predecessor محاسبه می‌کند.
 
+        اگر مقدار مورد نیاز predecessor هنوز None باشد، anchor برگردانده می‌شود.
+
         FS (Finish-Start): successor نمی‌تواند زودتر از EF(pred) + lag شروع شود
         SS (Start-Start):  successor نمی‌تواند زودتر از ES(pred) + lag شروع شود
-        FF (Finish-Finish): successor نمی‌تواند زودتر از EF(pred) + lag - duration(succ) تمام شود
+        FF (Finish-Finish): EF(succ) >= EF(pred) + lag
                            → ES(succ) >= EF(pred) + lag - duration(succ)
-        SF (Start-Finish):  successor نمی‌تواند زودتر از ES(pred) + lag - duration(succ) تمام شود
+        SF (Start-Finish):  EF(succ) >= ES(pred) + lag
                            → ES(succ) >= ES(pred) + lag - duration(succ)
         """
         pred = self.nodes[edge.from_task_id]
@@ -276,66 +282,74 @@ class CPMEngine:
         lag = edge.lag_hours
 
         if edge.dep_type == "FS":
-            # ES(succ) >= EF(pred) + lag
             base = pred.early_finish
+            if base is None:
+                return anchor
             return self._add_hours(succ, base, lag) if lag else base
 
         elif edge.dep_type == "SS":
-            # ES(succ) >= ES(pred) + lag
             base = pred.early_start
+            if base is None:
+                return anchor
             return self._add_hours(succ, base, lag) if lag else base
 
         elif edge.dep_type == "FF":
-            # EF(succ) >= EF(pred) + lag
-            # → ES(succ) >= EF(pred) + lag - duration(succ)
-            constraint_ef = self._add_hours(succ, pred.early_finish, lag) if lag else pred.early_finish
+            base = pred.early_finish
+            if base is None:
+                return anchor
+            constraint_ef = self._add_hours(succ, base, lag) if lag else base
             return self._subtract_hours(succ, constraint_ef, succ.remaining_duration_hours)
 
         elif edge.dep_type == "SF":
-            # EF(succ) >= ES(pred) + lag
-            # → ES(succ) >= ES(pred) + lag - duration(succ)
-            constraint_ef = self._add_hours(succ, pred.early_start, lag) if lag else pred.early_start
+            base = pred.early_start
+            if base is None:
+                return anchor
+            constraint_ef = self._add_hours(succ, base, lag) if lag else base
             return self._subtract_hours(succ, constraint_ef, succ.remaining_duration_hours)
 
-        # fallback (should not reach)
-        return pred.early_finish
+        # fallback
+        return pred.early_finish if pred.early_finish is not None else anchor
 
-    def _calc_lf_from_edge(self, edge: EdgeInfo) -> datetime.datetime:
+    def _calc_lf_from_edge(self, edge: EdgeInfo) -> datetime.datetime | None:
         """
         با توجه به نوع وابستگی، latest finish ممکن predecessor را بر اساس
         مقادیر backward pass successor محاسبه می‌کند.
 
+        اگر مقدار مورد نیاز successor هنوز None باشد، None برگردانده می‌شود.
+
         FS: LF(pred) <= LS(succ) - lag
-        SS: LF(pred) <= LS(succ) - lag + duration(pred)
+        SS: LS(pred) <= LS(succ) - lag → LF(pred) <= LS(succ) - lag + duration(pred)
         FF: LF(pred) <= LF(succ) - lag
-        SF: LF(pred) <= LF(succ) - lag + duration(pred)
+        SF: LS(pred) <= LF(succ) - lag → LF(pred) <= LF(succ) - lag + duration(pred)
         """
         pred = self.nodes[edge.from_task_id]
         succ = self.nodes[edge.to_task_id]
         lag = edge.lag_hours
 
         if edge.dep_type == "FS":
-            # LF(pred) <= LS(succ) - lag
             base = succ.late_start
+            if base is None:
+                return None
             return self._subtract_hours(pred, base, lag) if lag else base
 
         elif edge.dep_type == "SS":
-            # LS(pred) <= LS(succ) - lag
-            # → LF(pred) <= LS(succ) - lag + duration(pred)
-            constraint_ls = self._subtract_hours(pred, succ.late_start, lag) if lag else succ.late_start
+            base = succ.late_start
+            if base is None:
+                return None
+            constraint_ls = self._subtract_hours(pred, base, lag) if lag else base
             return self._add_hours(pred, constraint_ls, pred.remaining_duration_hours)
 
         elif edge.dep_type == "FF":
-            # LF(pred) <= LF(succ) - lag
             base = succ.late_finish
+            if base is None:
+                return None
             return self._subtract_hours(pred, base, lag) if lag else base
 
         elif edge.dep_type == "SF":
-            # LS(pred) <= LF(succ) - lag - duration(succ) ... actually:
-            # EF(succ) >= ES(pred) + lag → reversed:
-            # LF(succ) >= LS(pred) + lag → LS(pred) <= LF(succ) - lag
-            # → LF(pred) = LS(pred) + duration(pred) = LF(succ) - lag + duration(pred)
-            constraint_ls = self._subtract_hours(pred, succ.late_finish, lag) if lag else succ.late_finish
+            base = succ.late_finish
+            if base is None:
+                return None
+            constraint_ls = self._subtract_hours(pred, base, lag) if lag else base
             return self._add_hours(pred, constraint_ls, pred.remaining_duration_hours)
 
         # fallback
@@ -367,8 +381,8 @@ class CPMEngine:
 
             # ── تسک تکمیل‌شده: ثابت ──
             if node.is_completed:
-                node.early_start = node.actual.actual_start
-                node.early_finish = node.actual.actual_finish or node.actual.actual_start
+                node.early_start = node.actual.actual_start or anchor
+                node.early_finish = node.actual.actual_finish or node.early_start
                 continue
 
             # ── تسک در حال اجرا: ES ثابت، EF از الان + باقیمانده ──
@@ -376,7 +390,6 @@ class CPMEngine:
                 node.early_start = node.actual.actual_start
 
                 # EF = max(data_date, dependency constraints) + remaining_duration
-                # ولی چون تسک شروع شده، EF حداقل از data_date محاسبه می‌شود
                 ef_from_now = self._add_hours(node, self._data_date, node.remaining_duration_hours)
 
                 # بررسی وابستگی‌ها (ممکنه predecessor هنوز تموم نشده باشه)
@@ -386,15 +399,13 @@ class CPMEngine:
                         pred = self.nodes[e.from_task_id]
                         if pred.early_finish is None:
                             continue
-                        dep_es = self._calc_es_from_edge(e)
+                        dep_es = self._calc_es_from_edge(e, anchor)
                         es_from_deps.append(dep_es)
 
                     if es_from_deps:
-                        # اگر constraint وابستگی بعد از data_date باشد، EF عقب‌تر می‌رود
                         latest_constraint = max(es_from_deps)
-                        ef_from_constraint = self._add_hours(
-                            node, max(latest_constraint, self._data_date), node.remaining_duration_hours
-                        )
+                        replan_point = max(latest_constraint, self._data_date)
+                        ef_from_constraint = self._add_hours(node, replan_point, node.remaining_duration_hours)
                         ef_from_now = max(ef_from_now, ef_from_constraint)
 
                 node.early_finish = ef_from_now
@@ -406,7 +417,7 @@ class CPMEngine:
             else:
                 es_candidates = []
                 for e in node.predecessors:
-                    dep_es = self._calc_es_from_edge(e)
+                    dep_es = self._calc_es_from_edge(e, anchor)
                     es_candidates.append(dep_es)
 
                 es = max(es_candidates)
@@ -417,8 +428,8 @@ class CPMEngine:
             node.early_finish = self._add_hours(node, es, node.remaining_duration_hours)
 
         # ── محاسبه بازه پروژه ──
-        starts = [n.early_start for n in self.nodes.values() if n.early_start]
-        finishes = [n.early_finish for n in self.nodes.values() if n.early_finish]
+        starts = [n.early_start for n in self.nodes.values() if n.early_start is not None]
+        finishes = [n.early_finish for n in self.nodes.values() if n.early_finish is not None]
 
         self._project_start = min(starts) if starts else anchor
         self._project_finish = max(finishes) if finishes else anchor
@@ -445,7 +456,7 @@ class CPMEngine:
 
             # ── تسک در حال اجرا ──
             if node.is_in_progress:
-                node.late_start = node.actual.actual_start
+                node.late_start = node.early_start  # actual_start
 
                 if not node.successors:
                     node.late_finish = self._project_finish
@@ -453,11 +464,10 @@ class CPMEngine:
                     lf_candidates = []
                     for e in node.successors:
                         lf = self._calc_lf_from_edge(e)
-                        lf_candidates.append(lf)
-                    node.late_finish = min(lf_candidates)
+                        if lf is not None:
+                            lf_candidates.append(lf)
+                    node.late_finish = min(lf_candidates) if lf_candidates else self._project_finish
 
-                # LF نباید کمتر از EF باشد (اگر هست یعنی تاخیر وجود دارد)
-                # ولی مقدار واقعی را ثبت می‌کنیم برای محاسبه float منفی
                 continue
 
             # ── تسک شروع‌نشده ──
@@ -467,8 +477,9 @@ class CPMEngine:
                 lf_candidates = []
                 for e in node.successors:
                     lf_candidate = self._calc_lf_from_edge(e)
-                    lf_candidates.append(lf_candidate)
-                lf = min(lf_candidates)
+                    if lf_candidate is not None:
+                        lf_candidates.append(lf_candidate)
+                lf = min(lf_candidates) if lf_candidates else self._project_finish
 
             node.late_finish = lf
             node.late_start = self._subtract_hours(node, lf, node.remaining_duration_hours)
@@ -480,7 +491,7 @@ class CPMEngine:
     def _compute_floats(self) -> None:
         for node in self.nodes.values():
             # Total Float = LS - ES (یا LF - EF)
-            if node.late_start and node.early_start:
+            if node.late_start is not None and node.early_start is not None:
                 node.total_float_hours = (
                     (node.late_start - node.early_start).total_seconds() / 3600
                 )
@@ -501,12 +512,90 @@ class CPMEngine:
                 ff_candidates = []
                 for e in node.successors:
                     succ = self.nodes[e.to_task_id]
-                    if node.early_finish and succ.early_start:
+                    if node.early_finish is not None and succ.early_start is not None:
                         ff = (succ.early_start - node.early_finish).total_seconds() / 3600
                         ff_candidates.append(ff)
                 node.free_float_hours = min(ff_candidates) if ff_candidates else node.total_float_hours
             else:
                 node.free_float_hours = node.total_float_hours
+
+    # ═══════════════════════════════════════
+    # Save results to DB
+    # ═══════════════════════════════════════
+
+    def _save_results(self) -> None:
+        """ذخیره نتایج CPM در TaskVersion و TaskScheduleMetrics."""
+        from .models import TaskVersion, TaskScheduleMetrics
+
+        metrics_to_create = []
+        metrics_to_update = []
+        tv_updates = []
+
+        existing_metrics = {
+            m.task_version_id: m
+            for m in TaskScheduleMetrics.objects.filter(
+                task_version__revision=self.revision
+            )
+        }
+
+        for node in self.nodes.values():
+            if node.early_start is None or node.early_finish is None:
+                continue
+
+            # آپدیت planned_start/finish در TaskVersion
+            tv_updates.append((node.tv_id, node.early_start, node.early_finish))
+
+            # ذخیره metrics
+            ls = node.late_start or node.early_start
+            lf = node.late_finish or node.early_finish
+
+            if node.tv_id in existing_metrics:
+                m = existing_metrics[node.tv_id]
+                m.early_start = node.early_start
+                m.early_finish = node.early_finish
+                m.late_start = ls
+                m.late_finish = lf
+                m.total_float_hours = int(node.total_float_hours)
+                m.free_float_hours = int(node.free_float_hours)
+                m.is_critical = node.is_critical
+                metrics_to_update.append(m)
+            else:
+                metrics_to_create.append(TaskScheduleMetrics(
+                    task_version_id=node.tv_id,
+                    early_start=node.early_start,
+                    early_finish=node.early_finish,
+                    late_start=ls,
+                    late_finish=lf,
+                    total_float_hours=int(node.total_float_hours),
+                    free_float_hours=int(node.free_float_hours),
+                    is_critical=node.is_critical,
+                ))
+
+        # Bulk update TaskVersions
+        if tv_updates:
+            tv_objs = TaskVersion.objects.filter(
+                id__in=[tv_id for tv_id, _, _ in tv_updates]
+            )
+            tv_map = {tv.id: tv for tv in tv_objs}
+            for tv_id, es, ef in tv_updates:
+                tv = tv_map.get(tv_id)
+                if tv:
+                    tv.planned_start = es
+                    tv.planned_finish = ef
+            TaskVersion.objects.bulk_update(
+                [tv_map[tv_id] for tv_id, _, _ in tv_updates if tv_id in tv_map],
+                ["planned_start", "planned_finish"]
+            )
+
+        # Bulk create/update metrics
+        if metrics_to_create:
+            TaskScheduleMetrics.objects.bulk_create(metrics_to_create)
+        if metrics_to_update:
+            TaskScheduleMetrics.objects.bulk_update(
+                metrics_to_update,
+                ["early_start", "early_finish", "late_start", "late_finish",
+                 "total_float_hours", "free_float_hours", "is_critical"]
+            )
 
     # ═══════════════════════════════════════
     # Public API
@@ -521,6 +610,7 @@ class CPMEngine:
         4. Forward pass (با در نظر گرفتن data_date)
         5. Backward pass
         6. محاسبه Float
+        7. ذخیره نتایج در دیتابیس
         """
         self._load()
 
@@ -532,6 +622,7 @@ class CPMEngine:
         self._forward_pass(order)
         self._backward_pass(order)
         self._compute_floats()
+        self._save_results()
 
         frozen_count = sum(1 for n in self.nodes.values() if self._is_frozen(n))
         completed_count = sum(1 for n in self.nodes.values() if n.is_completed)
