@@ -99,6 +99,11 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     duration = serializers.FloatField(required=False, write_only=True)
 
     progress = serializers.FloatField(required=False)
+    
+    # فیلدهای Actual (شروع/پایان واقعی) - write_only چون در to_representation جداگانه هندل می‌شوند
+    actual_start = serializers.DateTimeField(required=False, write_only=True, allow_null=True)
+    actual_finish = serializers.DateTimeField(required=False, write_only=True, allow_null=True)
+    
     resources = serializers.SerializerMethodField()
     constraintType = serializers.SerializerMethodField()
     constraintDate = serializers.SerializerMethodField()
@@ -110,7 +115,8 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
         model = TaskVersion
         fields = [
             'id', 'code', 'name', 'parentId', 'type', 'startDate', 'endDate',
-            'duration', 'progress', 'resources', 'constraintType', 'constraintDate', 'notes','metrics','description','weight'
+            'duration', 'progress', 'actual_start', 'actual_finish',
+            'resources', 'constraintType', 'constraintDate', 'notes','metrics','description','weight'
         ]
 
     def get_parentId(self, obj):
@@ -125,6 +131,13 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
 
         actual = getattr(instance, 'actual', None)
         data['progress'] = float(actual.progress) if actual else 0
+
+        # اطلاعات واقعی برای نمایش در فرانت‌اند
+        data['actual'] = {
+            'actualStart': actual.actual_start.strftime("%Y-%m-%dT%H:%M") if (actual and actual.actual_start) else '',
+            'actualFinish': actual.actual_finish.strftime("%Y-%m-%dT%H:%M") if (actual and actual.actual_finish) else '',
+            'progress': float(actual.progress) if actual else 0,
+        }
 
         data['duration'] = float(instance.duration_hours) if instance.duration_hours else 0
         return data
@@ -164,17 +177,25 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         progress = validated_data.pop('progress', None)
+        actual_start = validated_data.pop('actual_start', None)
+        actual_finish = validated_data.pop('actual_finish', None)
 
         instance = super().update(instance, validated_data)
 
-        if progress is not None:
+        # اگر هر یک از فیلدهای actual ارسال شده باشد، TaskActual را آپدیت کن
+        if progress is not None or actual_start is not None or actual_finish is not None:
             actual, _ = TaskActual.objects.get_or_create(
                 task_version=instance,
                 defaults={
                     'updated_by': self.context['request'].user
                 }
             )
-            actual.progress = progress
+            if progress is not None:
+                actual.progress = progress
+            if actual_start is not None:
+                actual.actual_start = actual_start
+            if actual_finish is not None:
+                actual.actual_finish = actual_finish
             actual.updated_by = self.context['request'].user
             actual.save()
 
