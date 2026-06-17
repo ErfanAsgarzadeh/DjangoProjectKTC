@@ -753,11 +753,14 @@ class TaskChatMessage(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="chat_messages")
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="chat_messages")
 
-    text = models.TextField()
+    text = models.TextField(blank=True, default='')
+    file = models.FileField(upload_to='chat_attachments/%Y/%m/', null=True, blank=True)
+    file_name = models.CharField(max_length=255, blank=True, default='')
+    file_type = models.CharField(max_length=50, blank=True, default='')  # e.g. 'image/png', 'application/pdf'
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['timestamp']  # مرتب‌سازی از قدیمی به جدید برای نمایش درست در چت
+        ordering = ['timestamp']
 
     def __str__(self):
         return f"Message by {self.user} on {self.task}"

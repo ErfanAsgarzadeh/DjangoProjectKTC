@@ -497,6 +497,7 @@ class TaskChatMessageViewSet(viewsets.ModelViewSet):
     queryset = TaskChatMessage.objects.all()
     serializer_class = TaskChatMessageSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         queryset = super().get_queryset()

@@ -124,6 +124,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Media files (uploaded by users)
+import os
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 AUTH_USER_MODEL = 'CustomUser.CustomUser'
 
 CORS_ALLOW_ALL_ORIGINS = False # برای امنیت بیشتر بهتر است False باشد

@@ -268,6 +268,8 @@ class TaskReportLogSerializer(serializers.ModelSerializer):
         ]
 
 class TaskChatMessageSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+
     class Meta:
         model = TaskChatMessage
         fields = [
@@ -275,13 +277,35 @@ class TaskChatMessageSerializer(serializers.ModelSerializer):
             'task',
             'user',
             'text',
+            'file',
+            'file_name',
+            'file_type',
+            'file_url',
             'timestamp'
         ]
         read_only_fields = [
             'id',
             'timestamp',
-            'user' # بک‌اند خودش این را ست می‌کند
+            'user',
+            'file_name',
+            'file_type',
+            'file_url',
         ]
+
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
+
+    def create(self, validated_data):
+        file = validated_data.get('file')
+        if file:
+            validated_data['file_name'] = file.name
+            validated_data['file_type'] = file.content_type or ''
+        return super().create(validated_data)
 
 
 class ResourcePoolSerializer(serializers.ModelSerializer):
