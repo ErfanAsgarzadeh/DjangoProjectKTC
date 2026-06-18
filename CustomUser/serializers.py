@@ -23,3 +23,16 @@ class CustomUserSerializer(serializers.ModelSerializer):
         # ساخت کاربر با این متد برای هش شدن اصولی رمز عبور الزامی است
         user = CustomUser.objects.create_user(**validated_data)
         return user
+
+    def update(self, instance, validated_data):
+        # رمز عبور باید جداگانه و با هش صحیح ذخیره شود
+        password = validated_data.pop('password', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if password:
+            instance.set_password(password)
+
+        instance.save()
+        return instance
