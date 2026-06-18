@@ -56,6 +56,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
 
+class CalendarViewSet(viewsets.ModelViewSet):
+    """تعریف و مدیریت تقویم‌های کاری مستقل (ساعات کاری + تعطیلات)"""
+    queryset = Calendar.objects.all().prefetch_related('intervals', 'exceptions')
+    serializer_class = CalendarSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # فقط قالب‌های مستقل (بدون پروژه) در صورت درخواست
+        if self.request.query_params.get('templates') == 'true':
+            queryset = queryset.filter(project__isnull=True)
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
+
+
 class RevisionViewSet(viewsets.ModelViewSet):
     """مدیریت نسخه‌ها (Revisions) با قابلیت فیلتر بر اساس پروژه"""
     queryset = Revision.objects.filter(is_deleted=False ).order_by('-number')

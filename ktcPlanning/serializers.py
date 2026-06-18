@@ -4,14 +4,79 @@ from rest_framework import serializers
 from .models import *
 
 
+# =========================================================
+# CALENDAR SERIALIZERS (تعریف تقویم مستقل + ساعات کاری + تعطیلات)
+# =========================================================
+
+class WorkingIntervalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkingInterval
+        fields = ['id', 'weekday', 'start_time', 'end_time']
+
+
+class CalendarExceptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarException
+        fields = ['id', 'date', 'is_working', 'description']
+
+
+class CalendarSerializer(serializers.ModelSerializer):
+    intervals = WorkingIntervalSerializer(many=True, required=False)
+    exceptions = CalendarExceptionSerializer(many=True, required=False)
+
+    class Meta:
+        model = Calendar
+        fields = ['id', 'name', 'is_default', 'project', 'intervals', 'exceptions']
+        extra_kwargs = {'project': {'required': False, 'allow_null': True}}
+
+    def create(self, validated_data):
+        intervals_data = validated_data.pop('intervals', [])
+        exceptions_data = validated_data.pop('exceptions', [])
+        calendar = Calendar.objects.create(**validated_data)
+        for iv in intervals_data:
+            WorkingInterval.objects.create(calendar=calendar, **iv)
+        for ex in exceptions_data:
+            CalendarException.objects.create(calendar=calendar, **ex)
+        return calendar
+
+    def update(self, instance, validated_data):
+        intervals_data = validated_data.pop('intervals', None)
+        exceptions_data = validated_data.pop('exceptions', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # جایگزینی کامل ساعات کاری در صورت ارسال
+        if intervals_data is not None:
+            instance.intervals.all().delete()
+            for iv in intervals_data:
+                WorkingInterval.objects.create(calendar=instance, **iv)
+
+        # جایگزینی کامل تعطیلات در صورت ارسال
+        if exceptions_data is not None:
+            instance.exceptions.all().delete()
+            for ex in exceptions_data:
+                CalendarException.objects.create(calendar=instance, **ex)
+
+        return instance
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', format="%Y-%m-%dT%H:%M:%S", read_only=True)
     description = serializers.SerializerMethodField()
     start_date = serializers.DateTimeField( format="%Y-%m-%d", required=False, allow_null=True)
     end_date = serializers.DateTimeField( format="%Y-%m-%d", required=False, allow_null=True)
+    # الصاق/خواندن تقویم پروژه
+    calendarId = serializers.PrimaryKeyRelatedField(
+        source='calendar', queryset=Calendar.objects.all(),
+        required=False, allow_null=True
+    )
+    calendarName = serializers.CharField(source='calendar.name', read_only=True, default=None)
+
     class Meta:
         model = Project
-        fields = ['id', 'name', 'description', 'createdAt','start_date','end_date']
+        fields = ['id', 'name', 'description', 'createdAt', 'start_date', 'end_date', 'calendarId', 'calendarName']
 
     def get_description(self, obj):
         return ""

@@ -201,10 +201,12 @@ class CPMEngine:
         for cal in Calendar.objects.filter(id__in=calendar_ids):
             self._cal_engines[cal.id] = CalendarEngine(cal)
 
-        # تقویم پیش‌فرض پروژه
-        default_cal = Calendar.objects.filter(
-            project=self.revision.project, is_default=True
-        ).first()
+        # تقویم پیش‌فرض پروژه: اول تقویم الصاق‌شده به پروژه، سپس تقویم default قدیمی
+        default_cal = getattr(self.revision.project, 'calendar', None)
+        if default_cal is None:
+            default_cal = Calendar.objects.filter(
+                project=self.revision.project, is_default=True
+            ).first()
         if default_cal:
             self._default_cal_engine = CalendarEngine(default_cal)
 

@@ -8,7 +8,7 @@ from .views import (
     DependencyViewSet, TaskReportLogViewSet, TaskChatMessageViewSet, TaskRoleViewSet, ResourceHistogramView,
     ImportMSPView, ResourcePoolViewSet, AssignmentViewSet, ResourceRateViewSet, ResourceExceptionViewSet,
     ResourceSkillMappingViewSet, ResourceViewSet, ResourceSkillViewSet, ResourceRoleViewSet, PersonalTaskViewSet,
-    VarianceReportViewSet
+    VarianceReportViewSet, CalendarViewSet
 )
 
 # ایجاد یک نمونه از روتور پیش‌فرض DRF
@@ -16,6 +16,7 @@ router = DefaultRouter()
 
 # ثبت ویوها در روتور
 router.register(r'projects', ProjectViewSet, basename='project')
+router.register(r'calendars', CalendarViewSet, basename='calendar')
 router.register(r'revisions', RevisionViewSet, basename='revision')
 router.register(r'wbs-nodes', WbsNodeViewSet, basename='wbs-node')
 router.register(r'activities', ActivityNodeViewSet, basename='activity')

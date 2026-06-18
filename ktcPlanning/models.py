@@ -22,6 +22,11 @@ class Project(models.Model):
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
+    # تقویم کاری الصاق‌شده به پروژه (مستقل تعریف می‌شود و اینجا انتخاب می‌گردد)
+    calendar = models.ForeignKey(
+        'Calendar', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='projects'
+    )
     def __str__(self):
         return self.name
 
@@ -31,12 +36,13 @@ class Project(models.Model):
 # =========================================================
 
 class Calendar(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="calendars")
+    # تقویم می‌تواند مستقل از پروژه باشد (قالب) و بعداً به پروژه الصاق شود
+    project = models.ForeignKey(Project, null=True, blank=True, on_delete=models.CASCADE, related_name="calendars")
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.name} ({self.project.name})"
+        return self.name
 
 
 class WorkingInterval(models.Model):
