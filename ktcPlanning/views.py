@@ -489,6 +489,27 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
                 defaults={'updated_by': request.user}
             )
             task_actual.progress = report.progress_percent
+
+            # ──────────────────────────────────────────────
+            # محاسبه خودکار شروع/پایان واقعی از روی ریپورت‌های تاییدشده
+            # (فقط اگر مستقیماً وارد نشده باشند)
+            # ──────────────────────────────────────────────
+            approved_reports = TaskReportLog.objects.filter(
+                task=report.task, is_approved=True
+            ).order_by('timestamp')
+
+            # actual_start = زمان اولین ریپورتِ دارای پیشرفت (> 0)
+            if task_actual.actual_start is None:
+                first_progress = approved_reports.filter(progress_percent__gt=0).first()
+                if first_progress:
+                    task_actual.actual_start = first_progress.timestamp
+
+            # actual_finish = زمان اولین ریپورتی که پیشرفت به ۱۰۰٪ رسیده
+            if task_actual.actual_finish is None:
+                completion = approved_reports.filter(progress_percent__gte=100).first()
+                if completion:
+                    task_actual.actual_finish = completion.timestamp
+
             task_actual.updated_by = request.user
             task_actual.save()
 
