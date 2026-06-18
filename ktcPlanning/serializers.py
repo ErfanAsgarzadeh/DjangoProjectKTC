@@ -99,6 +99,7 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
     duration = serializers.FloatField(required=False, write_only=True)
 
     progress = serializers.FloatField(required=False)
+    sequence = serializers.IntegerField(required=False)
     
     # فیلدهای Actual (شروع/پایان واقعی) - write_only چون در to_representation جداگانه هندل می‌شوند
     actual_start = serializers.DateTimeField(required=False, write_only=True, allow_null=True)
@@ -115,7 +116,7 @@ class ActivityNodeSerializer(serializers.ModelSerializer):
         model = TaskVersion
         fields = [
             'id', 'code', 'name', 'parentId', 'type', 'startDate', 'endDate',
-            'duration', 'progress', 'actual_start', 'actual_finish',
+            'duration', 'progress', 'sequence', 'actual_start', 'actual_finish',
             'resources', 'constraintType', 'constraintDate', 'notes','metrics','description','weight'
         ]
 
