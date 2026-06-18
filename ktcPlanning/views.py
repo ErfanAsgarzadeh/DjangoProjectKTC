@@ -375,8 +375,14 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
 
         wbs_node = get_object_or_404(WBSNodeVersion, node_id=parent_id, revision=revision)
 
+        # تخصیص sequence بر اساس ترتیب ساخت (آخرین + ۱) در همان گره WBS
+        # تا ترتیب پیش‌فرض نمایش، ترتیب ایجاد تسک‌ها باشد
+        max_seq = TaskVersion.objects.filter(
+            revision=revision, wbs_node=wbs_node, is_deleted=False
+        ).aggregate(Max('sequence'))['sequence__max'] or 0
+
         base_task = Task.objects.create(project=revision.project)
-        serializer.save(task=base_task, revision=revision, wbs_node=wbs_node)
+        serializer.save(task=base_task, revision=revision, wbs_node=wbs_node, sequence=max_seq + 1)
 
     def perform_update(self, serializer):
         check_revision_is_open(serializer.instance.revision)
