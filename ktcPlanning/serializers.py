@@ -107,11 +107,12 @@ class WbsNodeSerializer(serializers.ModelSerializer):
     endDate = serializers.DateTimeField(source='planned_finish', format="%Y-%m-%d", allow_null=True)
     duration = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
+    sequence = serializers.IntegerField(required=False)
 
     class Meta:
         model = WBSNodeVersion
         fields = ['id', 'code', 'name', 'parentId', 'type', 'isExpanded',
-                  'startDate', 'endDate', 'duration', 'progress']
+                  'startDate', 'endDate', 'duration', 'progress', 'sequence']
 
     def get_parentId(self, obj):
         return obj.parent.node.id if obj.parent else None
