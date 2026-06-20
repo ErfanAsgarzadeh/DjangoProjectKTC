@@ -331,6 +331,49 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
         # ۳. مخفی کردن خود گره WBS و تمامی گره‌های فرزند آن به صورت یکجا
         descendants.update(is_deleted=True)
 
+    # --- مرتب‌سازی مجدد نودهای WBS (drag & drop) ---
+    @action(detail=False, methods=['post'], url_path='reorder')
+    @transaction.atomic
+    def reorder(self, request):
+        """
+        ترتیب نمایش نودهای WBS هم‌نیا (زیر یک والد) را تغییر می‌دهد.
+        ورودی: revisionId و orderedIds (لیست node.id ها به ترتیب جدید).
+        به دلیل محدودیت یکتایی (revision, parent, sequence) از روش دو مرحله‌ای
+        (آفست موقت سپس مقدار نهایی) استفاده می‌شود تا تداخل پیش نیاید.
+        """
+        revision_id = request.data.get('revisionId')
+        ordered_ids = request.data.get('orderedIds', [])
+
+        if not revision_id or not ordered_ids:
+            return Response(
+                {"detail": "revisionId و orderedIds الزامی هستند."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        revision = get_object_or_404(Revision, id=revision_id)
+        check_revision_is_open(revision)
+
+        versions = {
+            str(v.node_id): v
+            for v in WBSNodeVersion.objects.filter(revision=revision, node_id__in=ordered_ids)
+        }
+
+        # مرحله ۱: آفست موقت برای دور زدن محدودیت یکتایی
+        for i, nid in enumerate(ordered_ids):
+            v = versions.get(str(nid))
+            if v:
+                v.sequence = 100000 + i
+                v.save(update_fields=['sequence'])
+
+        # مرحله ۲: مقادیر نهایی ۱..N
+        for i, nid in enumerate(ordered_ids):
+            v = versions.get(str(nid))
+            if v:
+                v.sequence = i + 1
+                v.save(update_fields=['sequence'])
+
+        return Response({"detail": "ترتیب نودهای WBS به‌روزرسانی شد."}, status=status.HTTP_200_OK)
+
 
 class ActivityNodeViewSet(viewsets.ModelViewSet):
     queryset = TaskVersion.objects.filter(is_deleted=False).select_related('metrics','actual')
