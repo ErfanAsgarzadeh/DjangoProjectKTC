@@ -41,14 +41,23 @@ from .permissions import (
 )
 
 
-def check_can_edit_revision(user, revision):
-    """ویرایش زمان‌بندی فقط برای کسانی که اجازه‌ی ویرایش پروژه را دارند."""
-    require_can_edit_project(user, revision.project)
+def check_revision_is_open(revision, user=None):
+    """
+    گارد ترکیبی برای ویرایش زمان‌بندی:
+    1) نسخه نباید قفل (approved) باشد.
+    2) اگر کاربر داده شود، باید مجوز ویرایش پروژه را داشته باشد.
 
-
-def check_revision_is_open(revision):
+    رفتار قدیمی (فقط با revision) برای حفظ سازگاری حفظ شده است.
+    """
     if revision.approved_at is not None:
         raise PermissionDenied("این نسخه قفل شده است و قابل تغییر نیست.")
+    if user is not None:
+        require_can_edit_project(user, revision.project)
+
+
+def check_can_edit_revision(user, revision):
+    """نسخه‌ی صریح‌تر برای استفاده‌های جدید."""
+    check_revision_is_open(revision, user)
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -119,6 +128,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
         if revision.approved_at:
             return Response({"detail": "این نسخه قبلاً تایید و قفل شده است."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # فقط کسی که اجازه ویرایش این پروژه را دارد می‌تواند تایید کند
+        require_can_edit_project(request.user, revision.project)
+
         revision.approved_by = request.user
         revision.approved_at = timezone.now()
         revision.save()
@@ -150,6 +162,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def create_draft_from_revision(self, request, pk=None):
         base_revision = self.get_object()
+
+        # فقط کسی که اجازه ویرایش پروژه را دارد می‌تواند پیش‌نویس بسازد
+        require_can_edit_project(request.user, base_revision.project)
 
         if not base_revision.approved_at:
             return Response(
@@ -238,7 +253,7 @@ class RevisionViewSet(viewsets.ModelViewSet):
         revision = self.get_object()
 
         # بررسی اینکه آیا نسخه باز است و قابلیت ویرایش دارد یا خیر
-        check_revision_is_open(revision)
+        check_revision_is_open(revision, request.user)
 
         try:
             # اجرای موتور CPM که Early/Late start و finish ها را حساب و ذخیره می‌کند
@@ -304,7 +319,7 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
             raise ValidationError({"revisionId": "آیدی نسخه برای ساخت گره الزامی است."})
 
         revision = get_object_or_404(Revision, id=revision_id)
-        check_revision_is_open(revision)
+        check_revision_is_open(revision, self.request.user)
 
         # پیدا کردن گره والد (در صورت وجود)
         parent_id = self.request.data.get('parentId')
@@ -334,12 +349,12 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        check_revision_is_open(serializer.instance.revision)
+        check_revision_is_open(serializer.instance.revision, self.request.user)
         serializer.save()
 
     def perform_destroy(self, instance):
         # بررسی قفل نبودن نسخه
-        check_revision_is_open(instance.revision)
+        check_revision_is_open(instance.revision, self.request.user)
 
         # ۱. گرفتن خود گره و تمامی زیرمجموعه‌های آن (فرزندان، نوه‌ها و...) به کمک MPTT
         descendants = instance.get_descendants(include_self=True)
@@ -373,7 +388,7 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
             )
 
         revision = get_object_or_404(Revision, id=revision_id)
-        check_revision_is_open(revision)
+        check_revision_is_open(revision, request.user)
 
         # نگاشت node.id → pk نسخه WBS در این ریویژن
         pk_map = {
@@ -452,7 +467,7 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
             raise ValidationError({"revision_id": "آیدی نسخه برای ساخت تسک الزامی است."})
 
         revision = get_object_or_404(Revision, id=revision_id)
-        check_revision_is_open(revision)
+        check_revision_is_open(revision, self.request.user)
 
         # تسک باید حتما به یک WBS متصل شود
         parent_id = self.request.data.get('parentId')
@@ -471,11 +486,11 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
         serializer.save(task=base_task, revision=revision, wbs_node=wbs_node, sequence=max_seq + 1)
 
     def perform_update(self, serializer):
-        check_revision_is_open(serializer.instance.revision)
+        check_revision_is_open(serializer.instance.revision, self.request.user)
         serializer.save()
 
     def perform_destroy(self, instance):
-        check_revision_is_open(instance.revision)
+        check_revision_is_open(instance.revision, self.request.user)
         instance.is_deleted = True
         instance.save()
 
@@ -498,15 +513,15 @@ class DependencyViewSet(viewsets.ModelViewSet):
         if not revision_id:
             raise ValidationError({"revisionId": "آیدی نسخه الزامی است."})
         revision = get_object_or_404(Revision, id=revision_id)
-        check_revision_is_open(revision)
+        check_revision_is_open(revision, self.request.user)
         serializer.save(revision=revision)
 
     def perform_update(self, serializer):
-        check_revision_is_open(serializer.instance.revision)
+        check_revision_is_open(serializer.instance.revision, self.request.user)
         serializer.save()
 
     def perform_destroy(self, instance):
-        check_revision_is_open(instance.revision)
+        check_revision_is_open(instance.revision, self.request.user)
         instance.delete()  # وابستگی‌ها می‌توانند فیزیکی حذف شوند
 
 
