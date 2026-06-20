@@ -353,24 +353,28 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
         revision = get_object_or_404(Revision, id=revision_id)
         check_revision_is_open(revision)
 
-        versions = {
-            str(v.node_id): v
+        # نگاشت node.id → pk نسخه WBS در این ریویژن
+        pk_map = {
+            str(v.node_id): v.pk
             for v in WBSNodeVersion.objects.filter(revision=revision, node_id__in=ordered_ids)
         }
 
-        # مرحله ۱: آفست موقت برای دور زدن محدودیت یکتایی
+        # نکته مهم: از .update() استفاده می‌کنیم نه .save()
+        # چون مدل MPTT با order_insertion_by=['sequence'] است و save() باعث
+        # جابجایی نود در درخت و خطای _make_sibling_of_root_node می‌شود.
+        # .update() فقط ستون sequence را آپدیت می‌کند و به ساختار درخت کاری ندارد.
+
+        # مرحله ۱: آفست موقت برای دور زدن محدودیت یکتایی (revision, parent, sequence)
         for i, nid in enumerate(ordered_ids):
-            v = versions.get(str(nid))
-            if v:
-                v.sequence = 100000 + i
-                v.save(update_fields=['sequence'])
+            pk = pk_map.get(str(nid))
+            if pk:
+                WBSNodeVersion.objects.filter(pk=pk).update(sequence=100000 + i)
 
         # مرحله ۲: مقادیر نهایی ۱..N
         for i, nid in enumerate(ordered_ids):
-            v = versions.get(str(nid))
-            if v:
-                v.sequence = i + 1
-                v.save(update_fields=['sequence'])
+            pk = pk_map.get(str(nid))
+            if pk:
+                WBSNodeVersion.objects.filter(pk=pk).update(sequence=i + 1)
 
         return Response({"detail": "ترتیب نودهای WBS به‌روزرسانی شد."}, status=status.HTTP_200_OK)
 
