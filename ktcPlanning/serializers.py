@@ -89,9 +89,9 @@ class RevisionSerializer(serializers.ModelSerializer):
     createdAt = serializers.DateTimeField(source='created_at', format="%Y-%m-%dT%H:%M:%S")
     approvedAt = serializers.DateTimeField(source='approved_at', format="%Y-%m-%dT%H:%M:%S")
     isBaseline = serializers.BooleanField(source='is_baseline')
-    # تاییدکننده‌ی تعیین‌شده
+    # تاییدکننده‌ی تعیین‌شده — User از models.py در namespace هست (User = get_user_model())
     designatedApproverId = serializers.PrimaryKeyRelatedField(
-        source='designated_approver', queryset=CustomUser.objects.all() if False else None,  # ست می‌شود در __init__
+        source='designated_approver', queryset=User.objects.all(),
         required=False, allow_null=True
     )
     designatedApproverName = serializers.CharField(source='designated_approver.username', read_only=True, default=None)
@@ -101,12 +101,6 @@ class RevisionSerializer(serializers.ModelSerializer):
         fields = ['id', 'projectId', 'number', 'description', 'projectStart','projectEnd',
                   'createdAt','approvedAt', 'isBaseline',
                   'designatedApproverId', 'designatedApproverName']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Lazy import چون در ابتدای فایل CustomUser ایمپورت نمی‌شود
-        from django.contrib.auth import get_user_model
-        self.fields['designatedApproverId'].queryset = get_user_model().objects.all()
 
 
 class WbsNodeSerializer(serializers.ModelSerializer):
