@@ -27,6 +27,11 @@ class Project(models.Model):
         'Calendar', null=True, blank=True,
         on_delete=models.SET_NULL, related_name='projects'
     )
+    # واحد سازمانی صاحب پروژه (برای پروژه‌هایی که مدیر واحد می‌سازد)
+    owner_unit = models.ForeignKey(
+        'CustomUser.OrgUnit', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='owned_projects'
+    )
     def __str__(self):
         return self.name
 

@@ -35,6 +35,15 @@ from .msp_importer import import_msp_xml
 from django.db.models import Max
 
 from .variance_engine import EVMEngine
+from .permissions import (
+    can_create_project, can_edit_project, require_can_create_project,
+    require_can_edit_project, is_company_level,
+)
+
+
+def check_can_edit_revision(user, revision):
+    """ویرایش زمان‌بندی فقط برای کسانی که اجازه‌ی ویرایش پروژه را دارند."""
+    require_can_edit_project(user, revision.project)
 
 
 def check_revision_is_open(revision):
@@ -48,12 +57,25 @@ class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
 
-    def perform_destroy(self, instance):
-        instance.is_deleted = True
-        instance.save()
+    # مشاهده برای همه آزاد است (get_queryset فیلتر نمی‌کند)
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user = self.request.user
+        require_can_create_project(user)
+        # مدیر واحد → پروژه به واحد خودش گره می‌خورد
+        owner_unit = None
+        if not is_company_level(user) and getattr(user, 'org_role', '') == 'unit_manager':
+            owner_unit = getattr(user, 'unit', None)
+        serializer.save(created_by=user, owner_unit=owner_unit)
+
+    def perform_update(self, serializer):
+        require_can_edit_project(self.request.user, serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        require_can_edit_project(self.request.user, instance)
+        instance.is_deleted = True
+        instance.save()
 
 
 class CalendarViewSet(viewsets.ModelViewSet):
