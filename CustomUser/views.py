@@ -1,11 +1,12 @@
-from rest_framework import generics, status
+from rest_framework import generics, status, viewsets
 from rest_framework.decorators import api_view
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import CustomUser
-from .serializers import CustomUserSerializer
+from .models import CustomUser, OrgUnit
+from .serializers import CustomUserSerializer, OrgUnitSerializer
+
 
 class RegisterView(generics.CreateAPIView):
     """
@@ -13,7 +14,7 @@ class RegisterView(generics.CreateAPIView):
     """
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
-    permission_classes = [AllowAny] # اجازه دسترسی به همه برای ثبت‌نام
+    permission_classes = [AllowAny]  # اجازه دسترسی به همه برای ثبت‌نام
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -24,9 +25,8 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        # این متد به صورت خودکار کاربری که توکن آن ارسال شده را برمی‌گرداند
-        # نیازی نیست فرانت‌اند ID کاربر را در URL بفرستد
         return self.request.user
+
 
 class UserListView(generics.ListAPIView):
     """
@@ -35,6 +35,32 @@ class UserListView(generics.ListAPIView):
     queryset = CustomUser.objects.all().order_by('id')
     serializer_class = CustomUserSerializer
     permission_classes = [IsAuthenticated]
+
+
+class OrgUnitViewSet(viewsets.ModelViewSet):
+    """مدیریت واحدهای سازمانی"""
+    queryset = OrgUnit.objects.all().order_by('name')
+    serializer_class = OrgUnitSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class UserManagementViewSet(viewsets.ModelViewSet):
+    """
+    مدیریت کاربران: تعیین واحد و نقش سازمانی هر نیرو.
+    (برای صفحه تنظیمات واحدها و نیروها)
+    """
+    queryset = CustomUser.objects.all().order_by('id')
+    serializer_class = CustomUserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        unit_id = self.request.query_params.get('unit_id')
+        if unit_id == 'none':
+            qs = qs.filter(unit__isnull=True)
+        elif unit_id:
+            qs = qs.filter(unit_id=unit_id)
+        return qs
 
 
 @api_view(['POST'])
