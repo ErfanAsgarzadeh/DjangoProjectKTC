@@ -82,17 +82,31 @@ class ProjectSerializer(serializers.ModelSerializer):
         return ""
 
 
+class ProjectViewerSerializer(serializers.ModelSerializer):
+    projectId = serializers.PrimaryKeyRelatedField(source='project', queryset=Project.objects.all())
+    userId = serializers.PrimaryKeyRelatedField(source='user', queryset=User.objects.all())
+    userName = serializers.CharField(source='user.username', read_only=True)
+    addedById = serializers.PrimaryKeyRelatedField(source='added_by', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True, format="%Y-%m-%dT%H:%M:%S")
+
+    class Meta:
+        model = ProjectViewer
+        fields = ['id', 'projectId', 'userId', 'userName', 'addedById', 'createdAt']
+
+
 class RevisionSerializer(serializers.ModelSerializer):
     projectId = serializers.PrimaryKeyRelatedField(source='project', read_only=True)
     projectStart = serializers.DateTimeField(source='project_start', format="%Y-%m-%d")
     projectEnd = serializers.DateTimeField(source='project_end', format="%Y-%m-%d")
     createdAt = serializers.DateTimeField(source='created_at', format="%Y-%m-%dT%H:%M:%S")
     approvedAt = serializers.DateTimeField(source='approved_at', format="%Y-%m-%dT%H:%M:%S")
+    approverId = serializers.PrimaryKeyRelatedField(source='approver', read_only=True)
+    approverName = serializers.CharField(source='approver.username', read_only=True, default=None)
     isBaseline = serializers.BooleanField(source='is_baseline')
 
     class Meta:
         model = Revision
-        fields = ['id', 'projectId', 'number', 'description', 'projectStart','projectEnd', 'createdAt','approvedAt', 'isBaseline']
+        fields = ['id', 'projectId', 'number', 'description', 'projectStart','projectEnd', 'createdAt','approvedAt', 'approverId', 'approverName', 'isBaseline']
 
 
 class WbsNodeSerializer(serializers.ModelSerializer):

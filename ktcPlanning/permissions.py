@@ -62,3 +62,17 @@ def require_can_create_project(user):
 def require_can_edit_project(user, project):
     if not can_edit_project(user, project):
         raise PermissionDenied("شما اجازه‌ی ویرایش این پروژه را ندارید.")
+
+
+def can_manage_viewers(user, project) -> bool:
+    """افزودن/حذفِ مشاهده‌گر (Viewer) فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت به‌عنوان safety net)."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_company_level(user):
+        return True
+    return getattr(project, 'created_by_id', None) == user.id
+
+
+def require_can_manage_viewers(user, project):
+    if not can_manage_viewers(user, project):
+        raise PermissionDenied("تنها سازندهٔ پروژه می‌تواند مشاهده‌گر اضافه یا حذف کند.")

@@ -36,6 +36,23 @@ class Project(models.Model):
         return self.name
 
 
+class ProjectViewer(models.Model):
+    """دسترسیِ مشاهده‌گر (Viewer) در سطحِ پروژه — توسطِ سازندهٔ پروژه اضافه می‌شود."""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="viewers")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="viewable_projects")
+    added_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="added_project_viewers"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("project", "user")]
+
+    def __str__(self):
+        return f"Viewer {self.user} on {self.project}"
+
+
 # =========================================================
 # 2. CALENDAR SYSTEM
 # =========================================================
@@ -90,6 +107,12 @@ class Revision(models.Model):
     )
     approved_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.PROTECT, related_name="approved_revisions"
+    )
+    # فردِ تعیین‌شده در زمانِ ساختِ نسخه که مسئولِ تایید/قفلِ آن است
+    approver = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="revisions_to_approve",
+        help_text="فردِ تعیین‌شده برای تایید/قفلِ این نسخه (در زمانِ ساختِ نسخه مشخص می‌شود)"
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

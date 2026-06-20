@@ -18,7 +18,7 @@ from .cpm import CPMEngine
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
     TaskActual, TaskChatMessage, Assignment, Resource, ResourcePool, ResourceRole, ResourceSkill, ResourceSkillMapping, \
-    ResourceException, ResourceRate, VarianceReport
+    ResourceException, ResourceRate, VarianceReport, Calendar, ProjectViewer
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
@@ -27,7 +27,8 @@ from .serializers import (
     DependencySerializer,
     TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer, ResourcePoolSerializer,
     ResourceRoleSerializer, ResourceSkillSerializer, ResourceSerializer, ResourceSkillMappingSerializer,
-    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer
+    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer,
+    CalendarSerializer, ProjectViewerSerializer
 )
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -37,7 +38,7 @@ from django.db.models import Max
 from .variance_engine import EVMEngine
 from .permissions import (
     can_create_project, can_edit_project, require_can_create_project,
-    require_can_edit_project, is_company_level,
+    require_can_edit_project, is_company_level, require_can_manage_viewers,
 )
 
 
@@ -76,6 +77,32 @@ class ProjectViewSet(viewsets.ModelViewSet):
         require_can_edit_project(self.request.user, instance)
         instance.is_deleted = True
         instance.save()
+
+
+class ProjectViewerViewSet(viewsets.ModelViewSet):
+    """
+    مدیریتِ مشاهده‌گرهای پروژه (Project Viewers).
+    افزودن/حذفِ مشاهده‌گر فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت به‌عنوان safety net) مجاز است.
+    """
+    queryset = ProjectViewer.objects.select_related('user', 'project', 'added_by').all()
+    serializer_class = ProjectViewerSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        project = serializer.validated_data['project']
+        require_can_manage_viewers(self.request.user, project)
+        serializer.save(added_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        require_can_manage_viewers(self.request.user, instance.project)
+        instance.delete()
 
 
 class CalendarViewSet(viewsets.ModelViewSet):
@@ -119,6 +146,17 @@ class RevisionViewSet(viewsets.ModelViewSet):
         if revision.approved_at:
             return Response({"detail": "این نسخه قبلاً تایید و قفل شده است."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # قفل توسط همان فردِ تعیین‌شده: تنها Approverِ مشخص‌شده می‌تواند این نسخه را قفل کند.
+        if not is_company_level(request.user):
+            if revision.approver_id:
+                if revision.approver_id != request.user.id:
+                    raise PermissionDenied(
+                        "تنها فردِ تعیین‌شده به‌عنوان تاییدکننده می‌تواند این نسخه را قفل کند."
+                    )
+            else:
+                # نسخه‌هایی که تاییدکننده‌ی مشخص ندارند (مثل نسخه‌های قدیمی) → حداقل مجوز ویرایش پروژه
+                require_can_edit_project(request.user, revision.project)
+
         revision.approved_by = request.user
         revision.approved_at = timezone.now()
         revision.save()
@@ -151,6 +189,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
     def create_draft_from_revision(self, request, pk=None):
         base_revision = self.get_object()
 
+        # ساختِ پیش‌نویس (نسخهٔ جدید) نیازمندِ مجوز ویرایش پروژه است
+        require_can_edit_project(request.user, base_revision.project)
+
         if not base_revision.approved_at:
             return Response(
                 {"detail": "نسخه پایه هنوز باز است. ابتدا آن را قفل کنید."},
@@ -165,13 +206,20 @@ class RevisionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # تعیینِ Approver در زمانِ ساختِ نسخه (پیش‌فرض: خودِ سازنده)
+        approver_id = request.data.get('approverId') or request.data.get('approver_id')
+        approver = request.user
+        if approver_id:
+            approver = get_object_or_404(User, pk=approver_id)
+
         new_revision_number = Revision.objects.filter(project=base_revision.project).count() + 1
         new_revision = Revision.objects.create(
             project=base_revision.project,
             number=new_revision_number,
             description=description,
             project_start=base_revision.project_start,
-            created_by=request.user
+            created_by=request.user,
+            approver=approver,
         )
 
         old_to_new_wbs_map = {}
@@ -305,6 +353,8 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
 
         revision = get_object_or_404(Revision, id=revision_id)
         check_revision_is_open(revision)
+        # فقط دارندگان مجوز ویرایش پروژه می‌توانند ساختار WBS را تغییر دهند
+        check_can_edit_revision(self.request.user, revision)
 
         # پیدا کردن گره والد (در صورت وجود)
         parent_id = self.request.data.get('parentId')
@@ -335,11 +385,13 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         check_revision_is_open(serializer.instance.revision)
+        check_can_edit_revision(self.request.user, serializer.instance.revision)
         serializer.save()
 
     def perform_destroy(self, instance):
         # بررسی قفل نبودن نسخه
         check_revision_is_open(instance.revision)
+        check_can_edit_revision(self.request.user, instance.revision)
 
         # ۱. گرفتن خود گره و تمامی زیرمجموعه‌های آن (فرزندان، نوه‌ها و...) به کمک MPTT
         descendants = instance.get_descendants(include_self=True)
@@ -374,6 +426,7 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
 
         revision = get_object_or_404(Revision, id=revision_id)
         check_revision_is_open(revision)
+        check_can_edit_revision(self.request.user, revision)
 
         # نگاشت node.id → pk نسخه WBS در این ریویژن
         pk_map = {
@@ -453,6 +506,7 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
 
         revision = get_object_or_404(Revision, id=revision_id)
         check_revision_is_open(revision)
+        check_can_edit_revision(self.request.user, revision)
 
         # تسک باید حتما به یک WBS متصل شود
         parent_id = self.request.data.get('parentId')
@@ -471,11 +525,34 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
         serializer.save(task=base_task, revision=revision, wbs_node=wbs_node, sequence=max_seq + 1)
 
     def perform_update(self, serializer):
-        check_revision_is_open(serializer.instance.revision)
+        revision = serializer.instance.revision
+        check_revision_is_open(revision)
+
+        # تشخیص اینکه آیا این به‌روزرسانی فقط گزارشِ پیشرفت/واقعیتِ اجراست
+        # (progress / actual_start / actual_finish) یا ساختارِ زمان‌بندی را عوض می‌کند.
+        # هدف: قفلِ ویرایشِ زمان‌بندی بدون شکستنِ جریانِ گزارش‌دهیِ مجری.
+        actual_only_fields = {'progress', 'actual_start', 'actual_finish'}
+        touched_fields = set(serializer.validated_data.keys())
+        is_actual_only = bool(touched_fields) and touched_fields.issubset(actual_only_fields)
+
+        user = self.request.user
+        if is_actual_only:
+            # مسیر گزارش‌دهی: دارندهٔ مجوز ویرایش پروژه یا هر کسی که روی این تسک نقش دارد
+            if not can_edit_project(user, revision.project):
+                has_role = TaskRole.objects.filter(
+                    task=serializer.instance.task, user=user
+                ).exists()
+                if not has_role:
+                    raise PermissionDenied("شما اجازه‌ی ثبت پیشرفت روی این تسک را ندارید.")
+        else:
+            # تغییر در ساختار/زمان‌بندی تسک → نیازمند مجوز ویرایش پروژه
+            check_can_edit_revision(user, revision)
+
         serializer.save()
 
     def perform_destroy(self, instance):
         check_revision_is_open(instance.revision)
+        check_can_edit_revision(self.request.user, instance.revision)
         instance.is_deleted = True
         instance.save()
 
@@ -499,14 +576,17 @@ class DependencyViewSet(viewsets.ModelViewSet):
             raise ValidationError({"revisionId": "آیدی نسخه الزامی است."})
         revision = get_object_or_404(Revision, id=revision_id)
         check_revision_is_open(revision)
+        check_can_edit_revision(self.request.user, revision)
         serializer.save(revision=revision)
 
     def perform_update(self, serializer):
         check_revision_is_open(serializer.instance.revision)
+        check_can_edit_revision(self.request.user, serializer.instance.revision)
         serializer.save()
 
     def perform_destroy(self, instance):
         check_revision_is_open(instance.revision)
+        check_can_edit_revision(self.request.user, instance.revision)
         instance.delete()  # وابستگی‌ها می‌توانند فیزیکی حذف شوند
 
 
@@ -645,6 +725,73 @@ class TaskRoleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(user_id=user_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        """
+        تخصیص دو مرحله‌ای نقش‌ها:
+        - بررسی‌کننده (reviewer): فقط توسط دارندهٔ مجوز ویرایش پروژه (سازندهٔ پروژه/مدیر واحد).
+        - مجری (executor): فقط توسط «بررسی‌کنندهٔ همان تسک» و آن هم از واحد سازمانی خودش.
+        - مالک/مدیر پروژه (owner/project manager): فقط دارندهٔ مجوز ویرایش پروژه.
+        مدیران سطح شرکت / سوپریوزر همیشه به‌عنوان safety net مجاز هستند.
+        """
+        actor = self.request.user
+        revision = serializer.validated_data['revision']
+        task = serializer.validated_data['task']
+        target_user = serializer.validated_data['user']
+        role = serializer.validated_data['role']
+        project = revision.project
+
+        # روی نسخهٔ قفل‌شده نمی‌توان نقش جدید تخصیص داد
+        check_revision_is_open(revision)
+
+        # safety net: مدیر سیستم / مدیر پروژه شرکت / سوپریوزر
+        if is_company_level(actor):
+            serializer.save()
+            return
+
+        if role == 'reviewer':
+            # تعیین بررسی‌کننده فقط برای دارندهٔ مجوز ویرایش پروژه
+            require_can_edit_project(actor, project)
+
+        elif role == 'executor':
+            # مجری را فقط بررسی‌کنندهٔ همان تسک تعیین می‌کند
+            is_reviewer = TaskRole.objects.filter(
+                revision=revision, task=task, user=actor, role='reviewer'
+            ).exists()
+            if not is_reviewer:
+                raise PermissionDenied("تنها بررسی‌کنندهٔ این تسک می‌تواند مجری تعیین کند.")
+            # و مجری باید از واحد سازمانی همان بررسی‌کننده باشد
+            actor_unit_id = getattr(actor, 'unit_id', None)
+            target_unit_id = getattr(target_user, 'unit_id', None)
+            if actor_unit_id is None or target_unit_id != actor_unit_id:
+                raise PermissionDenied("مجری باید از واحد سازمانی شما باشد.")
+
+        else:
+            # owner / project manager → نیازمند مجوز ویرایش پروژه
+            require_can_edit_project(actor, project)
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """حذف نقش با همان منطق اختیارِ تخصیص."""
+        actor = self.request.user
+        check_revision_is_open(instance.revision)
+
+        if is_company_level(actor) or can_edit_project(actor, instance.revision.project):
+            instance.delete()
+            return
+
+        # بررسی‌کننده می‌تواند مجری‌ای را که خودش تخصیص داده بردارد
+        if instance.role == 'executor':
+            is_reviewer = TaskRole.objects.filter(
+                revision=instance.revision, task=instance.task,
+                user=actor, role='reviewer'
+            ).exists()
+            if is_reviewer:
+                instance.delete()
+                return
+
+        raise PermissionDenied("شما اجازه‌ی حذف این نقش را ندارید.")
 
 
 def _date_range(start: date, end: date):
@@ -924,6 +1071,10 @@ class ImportMSPView(APIView):
 
         if not xml_file.name.lower().endswith(".xml"):
             return Response({"error": "File must be a .xml export from MS Project."}, status=400)
+
+        # ورود MSP ساختار زمان‌بندی را می‌سازد → نیازمند مجوز ویرایش پروژه
+        revision = get_object_or_404(Revision, id=revision_id)
+        check_can_edit_revision(request.user, revision)
 
         try:
             # فراخوانی تابع اصلاح شده در msp_importer.py
