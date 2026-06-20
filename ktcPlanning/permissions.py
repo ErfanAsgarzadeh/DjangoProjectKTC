@@ -125,3 +125,28 @@ def can_assign_task_role(actor, task, target_user, role: str) -> bool:
 def require_can_assign_task_role(actor, task, target_user, role: str):
     if not can_assign_task_role(actor, task, target_user, role):
         raise PermissionDenied("شما اجازه‌ی تخصیص این نقش را ندارید.")
+
+
+# ─────────────────────────────────────────────
+# تایید/قفل Revision (Approver تعیین‌شده)
+# ─────────────────────────────────────────────
+
+def can_approve_revision(actor, revision) -> bool:
+    """
+    تایید/قفل Revision:
+    - اگر تاییدکننده‌ی تعیین‌شده وجود دارد → فقط همان فرد (یا admin/superuser).
+    - در غیر اینصورت → کسی که اجازه‌ی ویرایش پروژه را دارد (سازگاری با حالت قدیم).
+    """
+    if not actor or not actor.is_authenticated:
+        return False
+    if actor.is_superuser or _role(actor) == 'company_admin':
+        return True
+    approver_id = getattr(revision, 'designated_approver_id', None)
+    if approver_id:
+        return actor.id == approver_id
+    return can_edit_project(actor, revision.project)
+
+
+def require_can_approve_revision(actor, revision):
+    if not can_approve_revision(actor, revision):
+        raise PermissionDenied("فقط تاییدکننده‌ی تعیین‌شده‌ی این نسخه می‌تواند آن را قفل کند.")

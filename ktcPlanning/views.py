@@ -130,8 +130,9 @@ class RevisionViewSet(viewsets.ModelViewSet):
         if revision.approved_at:
             return Response({"detail": "این نسخه قبلاً تایید و قفل شده است."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # فقط کسی که اجازه ویرایش این پروژه را دارد می‌تواند تایید کند
-        require_can_edit_project(request.user, revision.project)
+        # فقط تاییدکننده‌ی تعیین‌شده (یا admin) می‌تواند تایید کند
+        from .permissions import require_can_approve_revision
+        require_can_approve_revision(request.user, revision)
 
         revision.approved_by = request.user
         revision.approved_at = timezone.now()
@@ -182,13 +183,26 @@ class RevisionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # تاییدکننده‌ی تعیین‌شده (اختیاری ولی توصیه‌شده)
+        approver_id = request.data.get('designatedApproverId') or request.data.get('approverId')
+        designated_approver = None
+        if approver_id:
+            try:
+                designated_approver = User.objects.get(pk=approver_id)
+            except User.DoesNotExist:
+                return Response(
+                    {"detail": "کاربر تاییدکننده یافت نشد."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         new_revision_number = Revision.objects.filter(project=base_revision.project).count() + 1
         new_revision = Revision.objects.create(
             project=base_revision.project,
             number=new_revision_number,
             description=description,
             project_start=base_revision.project_start,
-            created_by=request.user
+            created_by=request.user,
+            designated_approver=designated_approver,
         )
 
         old_to_new_wbs_map = {}

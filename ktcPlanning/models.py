@@ -92,6 +92,11 @@ class Revision(models.Model):
         User, null=True, blank=True, on_delete=models.PROTECT, related_name="approved_revisions"
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    # تاییدکننده‌ی تعیین‌شده هنگام ساخت Revision (فقط همین فرد می‌تواند تایید/قفل کند)
+    designated_approver = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="revisions_to_approve"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     project_start=models.DateTimeField()
