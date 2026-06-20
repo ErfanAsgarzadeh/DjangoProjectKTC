@@ -39,6 +39,8 @@ from .permissions import (
     can_create_project, can_edit_project, require_can_create_project,
     require_can_edit_project, is_company_level,
 )
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 
 def check_revision_is_open(revision, user=None):
@@ -660,6 +662,53 @@ class TaskRoleViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(user_id=user_id)
 
         return queryset
+
+    def perform_create(self, serializer):
+        from .permissions import require_can_assign_task_role
+        task = serializer.validated_data.get('task')
+        target_user = serializer.validated_data.get('user')
+        role = serializer.validated_data.get('role')
+        require_can_assign_task_role(self.request.user, task, target_user, role)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from .permissions import require_can_assign_task_role
+        # حذف نقش هم با همان منطق نقش (فقط کسی که می‌توانسته بسازد می‌تواند حذف کند)
+        require_can_assign_task_role(self.request.user, instance.task, instance.user, instance.role)
+        instance.delete()
+
+    @action(detail=False, methods=['get'], url_path='assignable-users')
+    def assignable_users(self, request):
+        """
+        افراد قابل انتخاب برای یک نقش روی یک تسک خاص — برای dropdown فرانت.
+        پارامترها: ?taskId=<task_id>&role=<reviewer|executor>
+        """
+        from .permissions import _role as get_role, can_edit_project, is_task_reviewer
+        task_id = request.query_params.get('taskId')
+        role = request.query_params.get('role', 'reviewer')
+
+        if not task_id:
+            return Response({"detail": "taskId الزامی است."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            task = Task.objects.get(pk=task_id)
+        except Task.DoesNotExist:
+            return Response({"detail": "تسک یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+        actor = request.user
+        users = User.objects.none()
+
+        if actor.is_superuser or get_role(actor) == 'company_admin':
+            users = User.objects.all()
+        elif role == 'reviewer' and can_edit_project(actor, task.project):
+            # Reviewer باید به یک واحد وصل باشد (تا بعداً Executor انتخاب کند)
+            users = User.objects.filter(unit__isnull=False)
+        elif role == 'executor' and is_task_reviewer(actor, task) and getattr(actor, 'unit_id', None):
+            # Executor فقط از واحد مستقیم خود Reviewer (= actor)
+            users = User.objects.filter(unit_id=actor.unit_id)
+
+        from CustomUser.serializers import CustomUserSerializer
+        return Response(CustomUserSerializer(users.order_by('id'), many=True).data)
 
 
 def _date_range(start: date, end: date):
