@@ -18,6 +18,15 @@ from django.contrib.auth.context_processors import auth
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from a local .env file (if present).
+# Keeps secrets and DB credentials out of the codebase.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    # python-dotenv is optional; env vars can also be set by the shell.
+    pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -90,13 +99,35 @@ WSGI_APPLICATION = 'KTCProject.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+#
+# DB_ENGINE selects the backend:
+#   - "postgres" / "postgresql"  -> django.db.backends.postgresql  (default)
+#   - "sqlite"                   -> django.db.backends.sqlite3     (legacy/local fallback)
+# All connection params are read from environment variables; sensible defaults are used
+# for local development.
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+_DB_ENGINE = os.environ.get('DB_ENGINE', 'postgres').lower()
+
+if _DB_ENGINE in ('sqlite', 'sqlite3'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE':       'django.db.backends.postgresql',
+            'NAME':         os.environ.get('POSTGRES_DB',       'ktcproject'),
+            'USER':         os.environ.get('POSTGRES_USER',     'ktc_user'),
+            'PASSWORD':     os.environ.get('POSTGRES_PASSWORD', ''),
+            'HOST':         os.environ.get('POSTGRES_HOST',     '127.0.0.1'),
+            'PORT':         os.environ.get('POSTGRES_PORT',     '5432'),
+            # Persistent connections for better performance under load.
+            'CONN_MAX_AGE': int(os.environ.get('POSTGRES_CONN_MAX_AGE', '60')),
+        }
+    }
 
 
 # Password validation
