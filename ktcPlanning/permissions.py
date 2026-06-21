@@ -132,6 +132,55 @@ def require_can_edit_project(user, project):
         raise PermissionDenied("شما اجازه‌ی ویرایش این پروژه را ندارید.")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Read scoping — کدام پروژه‌ها برای یک کاربر قابلِ مشاهده‌اند
+# ─────────────────────────────────────────────────────────────────────────────
+
+def accessible_project_ids(user):
+    """
+    QuerySet از idِ پروژه‌هایی که کاربر اجازهٔ «مشاهده» دارد (برای فیلترِ `__in`).
+    سطحِ شرکت → همه. وگرنه اجتماعی از: created_by، مدیرِ owner_unit،
+    پروژه‌هایی که در آن‌ها TaskRole دارد، cross-unit، و ProjectViewer.
+    """
+    from django.db.models import Q
+    from .models import Project
+
+    base = Project.objects.filter(is_deleted=False)
+    if is_company_level(user):
+        return base.values_list('id', flat=True)
+    if not (user and user.is_authenticated):
+        return base.none().values_list('id', flat=True)
+
+    q = (
+        Q(created_by=user)
+        | Q(owner_unit__manager=user)
+        | Q(revisions__task_roles__user=user)
+        | Q(revisions__task_roles__user__unit__manager=user)
+    )
+    try:
+        from .models import ProjectViewer  # noqa: F401
+        q |= Q(viewers__user=user)
+    except Exception:
+        pass
+
+    return base.filter(q).values_list('id', flat=True).distinct()
+
+
+def accessible_projects(user):
+    """QuerySet پروژه‌هایی که کاربر اجازهٔ مشاهده دارد."""
+    from .models import Project
+    return Project.objects.filter(is_deleted=False, id__in=accessible_project_ids(user))
+
+
+def can_view_project(user, project) -> bool:
+    """آیا کاربر اجازهٔ مشاهدهٔ این پروژهٔ مشخص را دارد؟"""
+    if not project:
+        return False
+    if is_company_level(user):
+        return True
+    return project.id in set(accessible_project_ids(user))
+
+
 def can_manage_viewers(user, project) -> bool:
     """افزودن/حذفِ مشاهده‌گر (Viewer) فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت)."""
     if not user or not user.is_authenticated:
