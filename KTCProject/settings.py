@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 from django.contrib.auth.context_processors import auth
@@ -21,13 +22,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-hkg4*npzvsfhxo_2&twus94%ju+b6#e2c59r-@g@87(5prnb4u'
+# SECURITY WARNING: in production these MUST be provided via environment variables.
+# Defaults below are for local development only.
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-hkg4*npzvsfhxo_2&twus94%ju+b6#e2c59r-@g@87(5prnb4u',
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG: defaults to True for local dev. Set DJANGO_DEBUG=0 in production.
+DEBUG = os.environ.get('DJANGO_DEBUG', '1').lower() not in ('0', 'false', 'no')
 
-ALLOWED_HOSTS = ["*"]
+# ALLOWED_HOSTS: comma-separated list via env. Falls back to permissive in dev.
+_allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS', '').strip()
+if _allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ["*"] if DEBUG else []
 
 
 # Application definition
@@ -126,7 +136,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # Media files (uploaded by users)
-import os
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
@@ -154,16 +163,31 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ),
+    # Throttling: scoped + reasonable defaults. View-level throttle_scope is honored.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon':     '60/min',
+        'user':     '2000/min',
+        'register': '5/min',   # public registration is rate-limited per IP
+        'login':    '10/min',  # apply via throttle_scope on token-obtain views if added
+    },
 }
 
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), # اعتبار توکن برای 1 روز
+    'ACCESS_TOKEN_LIFETIME':  timedelta(days=1),     # کوتاه‌سازی به ۳۰ دقیقه در آینده، پس از فعال‌سازیِ refresh interceptor در فرانت
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'AUTH_HEADER_TYPES': ('Bearer',), # کلمه‌ای که فرانت‌اند ارسال می‌کند
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    # rotation + blacklist: هر بار که refresh استفاده می‌شود، توکنِ قبلی باطل و جدیدی صادر می‌شود.
+    'ROTATE_REFRESH_TOKENS':       True,
+    'BLACKLIST_AFTER_ROTATION':    True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME':  'HTTP_AUTHORIZATION',
 }
 
 CORS_ALLOW_HEADERS = [
