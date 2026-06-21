@@ -110,6 +110,52 @@ def get_pg_column_types(cur, table: str) -> dict[str, str]:
     return {row[0]: row[1] for row in cur.fetchall()}
 
 
+def get_pg_column_meta(cur, table: str) -> dict[str, dict]:
+    """Per-column metadata from Postgres: type, nullability, default expression."""
+    cur.execute(
+        "SELECT column_name, data_type, is_nullable, column_default "
+        "FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = %s",
+        [table],
+    )
+    return {
+        row[0]: {
+            "type": row[1],
+            "nullable": row[2] == "YES",
+            "default": row[3],
+        }
+        for row in cur.fetchall()
+    }
+
+
+def get_field_defaults_for(model, missing_cols: set[str], pg_meta: dict[str, dict]):
+    """For Postgres columns that don't exist in SQLite, return values to fill them.
+
+    A column is filled only when:
+      - it is NOT NULL in Postgres, AND
+      - it has no Postgres-level default, AND
+      - the corresponding Django model field defines a default.
+
+    Otherwise we omit the column from INSERT and let Postgres handle it.
+    """
+    fills: dict = {}
+    field_by_column = {
+        f.column: f for f in model._meta.concrete_fields if hasattr(f, "column")
+    }
+    for col in missing_cols:
+        meta = pg_meta.get(col)
+        if not meta:
+            continue
+        if meta["nullable"] or meta["default"] is not None:
+            continue  # Postgres will handle it
+        field = field_by_column.get(col)
+        if field is None or not field.has_default():
+            # No model-level default we can use — let DB error so user knows.
+            continue
+        fills[col] = field.get_default()
+    return fills
+
+
 def coerce_value(value, pg_type: str):
     """Convert a SQLite-shaped value to something PostgreSQL accepts.
 
@@ -177,8 +223,9 @@ def main() -> int:
             for model in plan:
                 table = model._meta.db_table
                 sqlite_cols = get_sqlite_columns(src, table)
-                pg_types = get_pg_column_types(cur, table)
-                pg_cols = set(pg_types.keys())
+                pg_meta = get_pg_column_meta(cur, table)
+                pg_types = {c: m["type"] for c, m in pg_meta.items()}
+                pg_cols = set(pg_meta.keys())
                 common = [c for c in sqlite_cols if c in pg_cols]
                 missing_in_sqlite = pg_cols - set(sqlite_cols)
                 extra_in_sqlite = set(sqlite_cols) - pg_cols
@@ -187,14 +234,23 @@ def main() -> int:
                     print(f"  SKIP {table} (no common columns)")
                     continue
 
-                col_list = ", ".join(f'"{c}"' for c in common)
-                rows = list(src.execute(f'SELECT {col_list} FROM "{table}"'))
+                # Determine which PG-only columns we must fill from model defaults.
+                fills = get_field_defaults_for(model, missing_in_sqlite, pg_meta)
+                fill_cols = list(fills.keys())
+
+                col_list_quoted = ", ".join(
+                    f'"{c}"' for c in (common + fill_cols)
+                )
+                select_cols = ", ".join(f'"{c}"' for c in common)
+                rows = list(src.execute(f'SELECT {select_cols} FROM "{table}"'))
 
                 # Coerce SQLite values to PostgreSQL-compatible types
                 # (most importantly: int 0/1 -> bool).
                 col_pg_types = [pg_types[c] for c in common]
+                fill_tuple = tuple(fills[c] for c in fill_cols)
                 coerced_rows = [
                     tuple(coerce_value(v, t) for v, t in zip(row, col_pg_types))
+                    + fill_tuple
                     for row in rows
                 ]
 
@@ -202,9 +258,12 @@ def main() -> int:
                 cur.execute(f'ALTER TABLE "{table}" DISABLE TRIGGER ALL')
                 cur.execute(f'TRUNCATE "{table}" CASCADE')
                 if coerced_rows:
-                    placeholders = ", ".join(["%s"] * len(common))
+                    placeholders = ", ".join(
+                        ["%s"] * (len(common) + len(fill_cols))
+                    )
                     insert_sql = (
-                        f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})'
+                        f'INSERT INTO "{table}" ({col_list_quoted}) '
+                        f"VALUES ({placeholders})"
                     )
                     cur.executemany(insert_sql, coerced_rows)
                 cur.execute(f'ALTER TABLE "{table}" ENABLE TRIGGER ALL')
@@ -212,6 +271,8 @@ def main() -> int:
                 hint = ""
                 if missing_in_sqlite:
                     hint += f" [pg-only: {','.join(sorted(missing_in_sqlite))}]"
+                if fill_cols:
+                    hint += f" [filled-from-model-default: {','.join(sorted(fill_cols))}]"
                 if extra_in_sqlite:
                     hint += f" [sqlite-only: {','.join(sorted(extra_in_sqlite))}]"
                 print(f"  {table}: {len(rows)} rows{hint}")
