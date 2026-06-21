@@ -8,7 +8,7 @@ from .views import (
     DependencyViewSet, TaskReportLogViewSet, TaskChatMessageViewSet, TaskRoleViewSet, ResourceHistogramView,
     ImportMSPView, ResourcePoolViewSet, AssignmentViewSet, ResourceRateViewSet, ResourceExceptionViewSet,
     ResourceSkillMappingViewSet, ResourceViewSet, ResourceSkillViewSet, ResourceRoleViewSet, PersonalTaskViewSet,
-    VarianceReportViewSet, CalendarViewSet, ProjectViewerViewSet
+    VarianceReportViewSet, CalendarViewSet, ProjectViewerViewSet, SystemSettingsView
 )
 
 # ایجاد یک نمونه از روتور پیش‌فرض DRF
@@ -40,5 +40,5 @@ router.register(r'variance-reports', VarianceReportViewSet, basename='variance-r
 urlpatterns = [
     path('', include(router.urls)),
     path("import-msp/", ImportMSPView.as_view(), name="import-msp"),
-
+    path("system-settings/", SystemSettingsView.as_view(), name="system-settings"),
 ]
