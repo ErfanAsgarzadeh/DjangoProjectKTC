@@ -1,54 +1,122 @@
 """
-منطق مرکزی مجوزدهی (Authorization) بر اساس نقش سازمانی و واحد.
+منطق مرکزی مجوزدهی (Authorization) بر اساس نقشِ سازمانی و واحد.
 
-قوانین اصلی:
-- مشاهده (read): برای همه‌ی کاربران احراز هویت‌شده آزاد است.
-- ساخت پروژه: company_admin / company_pm (کل شرکت) و unit_manager (واحد خودش).
-- ویرایش پروژه: مدیر شرکت، سازنده‌ی پروژه، یا مدیرِ واحدِ صاحب پروژه.
+طبقاتِ نقش (org_role):
+  - company_admin / company_pm  → سطحِ شرکت
+  - unit_manager                → مدیرِ واحد (به‌شرطِ اینکه واقعاً OrgUnit.manager باشد)
+  - project_manager             → مدیرِ پروژه (روی پروژه‌های ساختهٔ خودش)
+  - member                      → عضو معمولی
 
-نکته‌ی امنیتی: superuser همیشه دسترسی کامل دارد (safety net تا کسی قفل نشود).
+قواعد سطحِ بالا:
+  - مشاهده (read): فعلاً برای همهٔ کاربرانِ احرازشده باز است (در PR2 محدود می‌شود).
+  - ساختِ پروژه: company-level + unit_manager + project_manager.
+  - ویرایشِ پروژه: company-level، یا OrgUnit.manager واحدِ پروژه، یا created_by پروژه.
+  - تاییدِ نهاییِ گزارشِ پروژهٔ شرکتی: مدیرِ واحدِ برنامه‌ریزی (PR3).
+
+نکتهٔ امنیتی: superuser همیشه دسترسی کامل دارد (safety net).
 """
 
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helperهای بنیادی
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _role(user):
     return getattr(user, 'org_role', 'member') or 'member'
 
 
 def is_company_level(user) -> bool:
-    """مدیر سیستم یا مدیر پروژه‌های شرکت (یا superuser)."""
+    """مدیرِ سیستم یا مدیرِ پروژه‌های شرکت (یا superuser)."""
     if not user or not user.is_authenticated:
         return False
     return user.is_superuser or _role(user) in ('company_admin', 'company_pm')
 
 
 def can_create_project(user) -> bool:
+    """چه کسانی می‌توانند پروژهٔ جدید بسازند."""
     if not user or not user.is_authenticated:
         return False
-    return user.is_superuser or _role(user) in ('company_admin', 'company_pm', 'unit_manager')
+    return (
+        user.is_superuser
+        or _role(user) in ('company_admin', 'company_pm', 'unit_manager', 'project_manager')
+    )
 
 
 def manages_unit(user, unit) -> bool:
-    """آیا این کاربر مدیر این واحد است؟"""
-    if not unit:
-        return False
-    if getattr(unit, 'manager_id', None) == user.id:
-        return True
-    # مدیر واحدی که عضو همان واحد است
-    return _role(user) == 'unit_manager' and getattr(user, 'unit_id', None) == unit.id
+    """
+    مدیرِ واقعیِ یک واحد فقط کسی است که در `OrgUnit.manager` آن واحد ثبت شده باشد.
 
+    قبلاً این تابع به‌اشتباه هر کاربری با org_role='unit_manager' که عضوِ واحد باشد را
+    مدیرِ آن واحد در نظر می‌گرفت؛ این منجر به وجودِ چندین «مدیرِ واحدِ همتراز» می‌شد و
+    اصلِ «یک نفر مدیرِ هر واحد» را نقض می‌کرد. این رفتار اصلاح شده است: فقط FK رسمی
+    معتبر است.
+    """
+    if not user or not user.is_authenticated or not unit:
+        return False
+    return getattr(unit, 'manager_id', None) == user.id
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# واحدِ برنامه‌ریزی و delegation (آماده‌سازیِ پایه)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_planning_unit():
+    """
+    واحدِ علامت‌خوردهٔ `is_planning_unit=True` را برمی‌گرداند (اگر وجود داشته باشد).
+    Lazy import تا حلقهٔ ایمپورت با اپ CustomUser ایجاد نشود.
+    """
+    from CustomUser.models import OrgUnit
+    return OrgUnit.objects.filter(is_planning_unit=True).first()
+
+
+def get_planning_manager():
+    """مدیرِ واحدِ برنامه‌ریزی (یا None اگر تنظیم نشده باشد)."""
+    unit = get_planning_unit()
+    return unit.manager if unit else None
+
+
+def effective_actor_ids(user) -> set:
+    """
+    مجموعهٔ ID کاربرانی که این کاربر امروز «به‌نمایندگیِ آن‌ها» می‌تواند عمل کند.
+
+    امروز فقط شامل خودِ کاربر است. در آینده، با افزودنِ مدلِ Delegation
+    (انتقالِ کارتابل برای مدت محدود)، این مجموعه به ID کاربرانی که اختیارشان را
+    به این کاربر داده‌اند گسترش می‌یابد. هر تابعِ بررسیِ نقشِ خاص (مثلِ
+    is_planning_manager) از این تابع استفاده می‌کند تا delegation به‌صورتِ
+    شفاف و بدون refactor در همه‌جا فعال شود.
+    """
+    if not user or not user.is_authenticated:
+        return set()
+    return {user.id}
+
+
+def is_planning_manager(user) -> bool:
+    """آیا این کاربر، مدیرِ واحدِ برنامه‌ریزی است (یا اختیارش را دارد)؟"""
+    if not user or not user.is_authenticated:
+        return False
+    pm = get_planning_manager()
+    if not pm:
+        return False
+    return pm.id in effective_actor_ids(user)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# مجوزِ ویرایش پروژه و سایر helperهای رایج
+# ─────────────────────────────────────────────────────────────────────────────
 
 def can_edit_project(user, project) -> bool:
-    """آیا کاربر اجازه‌ی ویرایش این پروژه را دارد؟"""
+    """آیا کاربر اجازهٔ ویرایش این پروژه را دارد؟"""
     if not user or not user.is_authenticated:
         return False
     if is_company_level(user):
         return True
-    # سازنده‌ی پروژه
+    # سازندهٔ پروژه (شاملِ project_manager که پروژه‌ی خودش را ساخته)
     if getattr(project, 'created_by_id', None) == user.id:
         return True
-    # مدیرِ واحدِ صاحب پروژه
+    # مدیرِ واحدِ صاحبِ پروژه
     if manages_unit(user, getattr(project, 'owner_unit', None)):
         return True
     return False
@@ -64,8 +132,66 @@ def require_can_edit_project(user, project):
         raise PermissionDenied("شما اجازه‌ی ویرایش این پروژه را ندارید.")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Read scoping — کدام پروژه‌ها برای یک کاربر قابلِ مشاهده‌اند
+# ─────────────────────────────────────────────────────────────────────────────
+
+def accessible_project_ids(user):
+    """
+    QuerySet از idِ پروژه‌هایی که کاربر اجازهٔ «مشاهده» دارد.
+    برای استفادهٔ کارآمد به‌صورتِ زیرکوئری در فیلترِ `__in`.
+
+    منطقِ دسترسی (برای کاربرِ غیرِ سطحِ شرکت):
+      - پروژه‌هایی که خودش ساخته (created_by).
+      - پروژه‌هایی که او مدیرِ واحدِ صاحبشان است (owner_unit.manager).
+      - پروژه‌هایی که در آن‌ها روی تسکی نقش دارد (TaskRole).
+      - cross-unit: پروژه‌هایی که کسی از واحدِ تحتِ مدیریتِ او در آن‌ها نقش دارد.
+      - پروژه‌هایی که به‌عنوان Viewer به او اضافه شده (اگر مدلِ ProjectViewer نصب باشد).
+    سطحِ شرکت / superuser: همهٔ پروژه‌های غیرحذف‌شده.
+    """
+    from django.db.models import Q
+    from .models import Project
+
+    base = Project.objects.filter(is_deleted=False)
+    if is_company_level(user):
+        return base.values_list('id', flat=True)
+    if not (user and user.is_authenticated):
+        return base.none().values_list('id', flat=True)
+
+    q = (
+        Q(created_by=user)
+        | Q(owner_unit__manager=user)
+        | Q(revisions__task_roles__user=user)
+        | Q(revisions__task_roles__user__unit__manager=user)
+    )
+    # دسترسیِ Viewer — مدلِ ProjectViewer در PRِ جداگانه اضافه می‌شود؛
+    # اگر هنوز در این شاخه merge نشده باشد، این شرط با امنیت نادیده گرفته می‌شود.
+    try:
+        from .models import ProjectViewer  # noqa: F401
+        q |= Q(viewers__user=user)
+    except Exception:
+        pass
+
+    return base.filter(q).values_list('id', flat=True).distinct()
+
+
+def accessible_projects(user):
+    """QuerySet پروژه‌هایی که کاربر اجازهٔ مشاهده دارد."""
+    from .models import Project
+    return Project.objects.filter(is_deleted=False, id__in=accessible_project_ids(user))
+
+
+def can_view_project(user, project) -> bool:
+    """آیا کاربر اجازهٔ مشاهدهٔ این پروژهٔ مشخص را دارد؟"""
+    if not project:
+        return False
+    if is_company_level(user):
+        return True
+    return project.id in set(accessible_project_ids(user))
+
+
 def can_manage_viewers(user, project) -> bool:
-    """افزودن/حذفِ مشاهده‌گر (Viewer) فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت به‌عنوان safety net)."""
+    """افزودن/حذفِ مشاهده‌گر (Viewer) فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت)."""
     if not user or not user.is_authenticated:
         return False
     if is_company_level(user):
@@ -76,3 +202,52 @@ def can_manage_viewers(user, project) -> bool:
 def require_can_manage_viewers(user, project):
     if not can_manage_viewers(user, project):
         raise PermissionDenied("تنها سازندهٔ پروژه می‌تواند مشاهده‌گر اضافه یا حذف کند.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DRF BasePermission classes — ایمن‌ترین مسیر برای endpointهای مدیریتی
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IsCompanyLevel(BasePermission):
+    """فقط کاربرانِ سطحِ شرکت (company_admin / company_pm / superuser)."""
+    message = "این عملیات فقط برای کاربرانِ سطحِ شرکت مجاز است."
+
+    def has_permission(self, request, view):
+        return is_company_level(request.user)
+
+
+class IsCompanyLevelOrReadOnly(BasePermission):
+    """خواندن: هر کاربرِ احرازشده. نوشتن: فقط سطحِ شرکت."""
+    message = "ویرایش این منبع فقط برای کاربرانِ سطحِ شرکت مجاز است."
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return is_company_level(user)
+
+
+class CanManageUsers(BasePermission):
+    """
+    مدیریتِ کاربران: سطحِ شرکت یا مدیرِ یک واحد (که حداقل یک واحد را مدیریت می‌کند).
+    Scoping در سطحِ ردیف توسط ViewSet.get_queryset انجام می‌شود.
+    """
+    message = "شما اجازه‌ی مدیریتِ کاربران را ندارید."
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if is_company_level(user):
+            return True
+        # «مدیرِ واحد» واقعی = کسی که حداقل یک OrgUnit.manager او باشد
+        return user.managed_units.exists()
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if is_company_level(user):
+            return True
+        managed_ids = set(user.managed_units.values_list('id', flat=True))
+        return obj.unit_id in managed_ids
