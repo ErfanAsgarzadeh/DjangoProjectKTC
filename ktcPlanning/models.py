@@ -50,6 +50,23 @@ class Project(models.Model):
         return self.name
 
 
+class ProjectViewer(models.Model):
+    """دسترسیِ مشاهده‌گر (Viewer) در سطحِ پروژه — توسطِ سازندهٔ پروژه اضافه می‌شود."""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="viewers")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="viewable_projects")
+    added_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="added_project_viewers"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("project", "user")]
+
+    def __str__(self):
+        return f"Viewer {self.user} on {self.project}"
+
+
 # =========================================================
 # 2. CALENDAR SYSTEM
 # =========================================================

@@ -95,6 +95,32 @@ class ProjectViewSet(viewsets.ModelViewSet):
         instance.save()
 
 
+class ProjectViewerViewSet(viewsets.ModelViewSet):
+    """
+    مدیریتِ مشاهده‌گرهای پروژه (Project Viewers).
+    افزودن/حذفِ مشاهده‌گر فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت) مجاز است.
+    """
+    queryset = ProjectViewer.objects.select_related('user', 'project', 'added_by').all()
+    serializer_class = ProjectViewerSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        project = serializer.validated_data['project']
+        require_can_manage_viewers(self.request.user, project)
+        serializer.save(added_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        require_can_manage_viewers(self.request.user, instance.project)
+        instance.delete()
+
+
 class CalendarViewSet(viewsets.ModelViewSet):
     """تعریف و مدیریت تقویم‌های کاری مستقل (ساعات کاری + تعطیلات)"""
     queryset = Calendar.objects.all().prefetch_related('intervals', 'exceptions')

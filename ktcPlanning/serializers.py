@@ -82,6 +82,18 @@ class ProjectSerializer(serializers.ModelSerializer):
         return ""
 
 
+class ProjectViewerSerializer(serializers.ModelSerializer):
+    projectId = serializers.PrimaryKeyRelatedField(source='project', queryset=Project.objects.all())
+    userId = serializers.PrimaryKeyRelatedField(source='user', queryset=User.objects.all())
+    userName = serializers.CharField(source='user.username', read_only=True)
+    addedById = serializers.PrimaryKeyRelatedField(source='added_by', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True, format="%Y-%m-%dT%H:%M:%S")
+
+    class Meta:
+        model = ProjectViewer
+        fields = ['id', 'projectId', 'userId', 'userName', 'addedById', 'createdAt']
+
+
 class RevisionSerializer(serializers.ModelSerializer):
     projectId = serializers.PrimaryKeyRelatedField(source='project', read_only=True)
     projectStart = serializers.DateTimeField(source='project_start', format="%Y-%m-%d")

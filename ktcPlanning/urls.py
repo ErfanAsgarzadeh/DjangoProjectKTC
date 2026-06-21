@@ -16,6 +16,7 @@ router = DefaultRouter()
 
 # ثبت ویوها در روتور
 router.register(r'projects', ProjectViewSet, basename='project')
+router.register(r'project-viewers', ProjectViewerViewSet, basename='project-viewer')
 router.register(r'calendars', CalendarViewSet, basename='calendar')
 router.register(r'revisions', RevisionViewSet, basename='revision')
 router.register(r'wbs-nodes', WbsNodeViewSet, basename='wbs-node')
