@@ -100,6 +100,39 @@ def get_pg_columns(cur, table: str) -> set[str]:
     return {row[0] for row in cur.fetchall()}
 
 
+def get_pg_column_types(cur, table: str) -> dict[str, str]:
+    """Map column_name -> PostgreSQL data_type ('boolean', 'integer', 'jsonb', ...)."""
+    cur.execute(
+        "SELECT column_name, data_type FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = %s",
+        [table],
+    )
+    return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def coerce_value(value, pg_type: str):
+    """Convert a SQLite-shaped value to something PostgreSQL accepts.
+
+    SQLite stores booleans as 0/1 integers; PostgreSQL has a real boolean type
+    and refuses implicit int->bool casts. We also normalize empty strings for
+    JSON columns and pass everything else through untouched.
+    """
+    if value is None:
+        return None
+    if pg_type == "boolean":
+        # SQLite: 0/1, '0'/'1', possibly already True/False
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "t", "true", "y", "yes")
+    if pg_type in ("json", "jsonb") and isinstance(value, str) and value == "":
+        # Some Django setups stored "" instead of NULL for nullable JSON fields.
+        return None
+    return value
+
+
 def get_sqlite_columns(src: sqlite3.Connection, table: str) -> list[str]:
     """Returns column names in declared order."""
     return [row["name"] for row in src.execute(f'PRAGMA table_info("{table}")')]
@@ -144,7 +177,8 @@ def main() -> int:
             for model in plan:
                 table = model._meta.db_table
                 sqlite_cols = get_sqlite_columns(src, table)
-                pg_cols = get_pg_columns(cur, table)
+                pg_types = get_pg_column_types(cur, table)
+                pg_cols = set(pg_types.keys())
                 common = [c for c in sqlite_cols if c in pg_cols]
                 missing_in_sqlite = pg_cols - set(sqlite_cols)
                 extra_in_sqlite = set(sqlite_cols) - pg_cols
@@ -156,15 +190,23 @@ def main() -> int:
                 col_list = ", ".join(f'"{c}"' for c in common)
                 rows = list(src.execute(f'SELECT {col_list} FROM "{table}"'))
 
+                # Coerce SQLite values to PostgreSQL-compatible types
+                # (most importantly: int 0/1 -> bool).
+                col_pg_types = [pg_types[c] for c in common]
+                coerced_rows = [
+                    tuple(coerce_value(v, t) for v, t in zip(row, col_pg_types))
+                    for row in rows
+                ]
+
                 # Disable triggers (FK checks) for this table during insert.
                 cur.execute(f'ALTER TABLE "{table}" DISABLE TRIGGER ALL')
                 cur.execute(f'TRUNCATE "{table}" CASCADE')
-                if rows:
+                if coerced_rows:
                     placeholders = ", ".join(["%s"] * len(common))
                     insert_sql = (
                         f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})'
                     )
-                    cur.executemany(insert_sql, [tuple(r) for r in rows])
+                    cur.executemany(insert_sql, coerced_rows)
                 cur.execute(f'ALTER TABLE "{table}" ENABLE TRIGGER ALL')
 
                 hint = ""
