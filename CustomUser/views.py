@@ -37,6 +37,30 @@ class UserListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
 
+class UsersInMyUnitView(generics.ListAPIView):
+    """
+    لیست افراد قابل انتخاب توسط کاربر جاری به‌عنوان Approver:
+    - superuser یا company_admin / company_pm → همه‌ی کاربران
+    - unit_manager → فقط اعضای واحد خودش (شامل خودش)
+    - member → فقط هم‌واحدی‌های خودش (یا اگر واحدی ندارد، فقط خودش)
+    """
+    serializer_class = CustomUserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        u = self.request.user
+        role = getattr(u, 'org_role', 'member') or 'member'
+
+        if u.is_superuser or role in ('company_admin', 'company_pm'):
+            return CustomUser.objects.all().order_by('id')
+
+        unit_id = getattr(u, 'unit_id', None)
+        if not unit_id:
+            return CustomUser.objects.filter(pk=u.pk)
+
+        return CustomUser.objects.filter(unit_id=unit_id).order_by('id')
+
+
 class OrgUnitViewSet(viewsets.ModelViewSet):
     """مدیریت واحدهای سازمانی"""
     queryset = OrgUnit.objects.all().order_by('name')

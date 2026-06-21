@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     RegisterView, UserProfileView, UserListView, logout_view,
-    OrgUnitViewSet, UserManagementViewSet
+    OrgUnitViewSet, UserManagementViewSet, UsersInMyUnitView
 )
 
 router = DefaultRouter()
@@ -13,6 +13,7 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='auth_register'),
     path('profile/', UserProfileView.as_view(), name='user_profile'),
     path('users/', UserListView.as_view(), name='user-list'),
+    path('users/in-my-unit/', UsersInMyUnitView.as_view(), name='users-in-my-unit'),
     path('logout/', logout_view, name='logout'),
     path('', include(router.urls)),
 ]
