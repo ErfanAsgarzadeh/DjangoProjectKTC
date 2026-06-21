@@ -11,7 +11,25 @@ class OrgUnit(models.Model):
         on_delete=models.SET_NULL, related_name='managed_units',
         verbose_name="مدیر واحد"
     )
+    # علامت‌گذاری «واحدِ برنامه‌ریزی». فقط یک واحد در سیستم می‌تواند این فلگ را داشته باشد.
+    # مدیرِ همین واحد، نقشِ «مدیرِ برنامه‌ریزی» را در workflow تاییدها بازی می‌کند.
+    is_planning_unit = models.BooleanField(
+        default=False,
+        verbose_name="واحدِ برنامه‌ریزی؟",
+        help_text="فقط یک واحد می‌تواند به‌عنوان واحدِ برنامه‌ریزی علامت‌گذاری شود."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # تضمین می‌کند که فقط یک ردیف با is_planning_unit=True وجود داشته باشد.
+            # ردیف‌های با مقدار False محدودیت ندارند.
+            models.UniqueConstraint(
+                fields=['is_planning_unit'],
+                condition=models.Q(is_planning_unit=True),
+                name='only_one_planning_unit',
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -19,10 +37,11 @@ class OrgUnit(models.Model):
 
 class CustomUser(AbstractUser):
     ORG_ROLES = [
-        ("company_admin", "مدیر سیستم"),
-        ("company_pm", "مدیر پروژه شرکت"),
-        ("unit_manager", "مدیر واحد"),
-        ("member", "عضو"),
+        ("company_admin",   "مدیر سیستم"),
+        ("company_pm",      "مدیر پروژه شرکت"),
+        ("unit_manager",    "مدیر واحد"),
+        ("project_manager", "مدیر پروژه"),
+        ("member",          "عضو"),
     ]
 
     employee_code = models.CharField(max_length=10, unique=True, null=True, blank=True, verbose_name="Employee Code")
