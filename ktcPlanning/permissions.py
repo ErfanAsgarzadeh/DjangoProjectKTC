@@ -132,6 +132,64 @@ def require_can_edit_project(user, project):
         raise PermissionDenied("شما اجازه‌ی ویرایش این پروژه را ندارید.")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Read scoping — کدام پروژه‌ها برای یک کاربر قابلِ مشاهده‌اند
+# ─────────────────────────────────────────────────────────────────────────────
+
+def accessible_project_ids(user):
+    """
+    QuerySet از idِ پروژه‌هایی که کاربر اجازهٔ «مشاهده» دارد.
+    برای استفادهٔ کارآمد به‌صورتِ زیرکوئری در فیلترِ `__in`.
+
+    منطقِ دسترسی (برای کاربرِ غیرِ سطحِ شرکت):
+      - پروژه‌هایی که خودش ساخته (created_by).
+      - پروژه‌هایی که او مدیرِ واحدِ صاحبشان است (owner_unit.manager).
+      - پروژه‌هایی که در آن‌ها روی تسکی نقش دارد (TaskRole).
+      - cross-unit: پروژه‌هایی که کسی از واحدِ تحتِ مدیریتِ او در آن‌ها نقش دارد.
+      - پروژه‌هایی که به‌عنوان Viewer به او اضافه شده (اگر مدلِ ProjectViewer نصب باشد).
+    سطحِ شرکت / superuser: همهٔ پروژه‌های غیرحذف‌شده.
+    """
+    from django.db.models import Q
+    from .models import Project
+
+    base = Project.objects.filter(is_deleted=False)
+    if is_company_level(user):
+        return base.values_list('id', flat=True)
+    if not (user and user.is_authenticated):
+        return base.none().values_list('id', flat=True)
+
+    q = (
+        Q(created_by=user)
+        | Q(owner_unit__manager=user)
+        | Q(revisions__task_roles__user=user)
+        | Q(revisions__task_roles__user__unit__manager=user)
+    )
+    # دسترسیِ Viewer — مدلِ ProjectViewer در PRِ جداگانه اضافه می‌شود؛
+    # اگر هنوز در این شاخه merge نشده باشد، این شرط با امنیت نادیده گرفته می‌شود.
+    try:
+        from .models import ProjectViewer  # noqa: F401
+        q |= Q(viewers__user=user)
+    except Exception:
+        pass
+
+    return base.filter(q).values_list('id', flat=True).distinct()
+
+
+def accessible_projects(user):
+    """QuerySet پروژه‌هایی که کاربر اجازهٔ مشاهده دارد."""
+    from .models import Project
+    return Project.objects.filter(is_deleted=False, id__in=accessible_project_ids(user))
+
+
+def can_view_project(user, project) -> bool:
+    """آیا کاربر اجازهٔ مشاهدهٔ این پروژهٔ مشخص را دارد؟"""
+    if not project:
+        return False
+    if is_company_level(user):
+        return True
+    return project.id in set(accessible_project_ids(user))
+
+
 def can_manage_viewers(user, project) -> bool:
     """افزودن/حذفِ مشاهده‌گر (Viewer) فقط توسطِ سازندهٔ پروژه (و سطحِ شرکت)."""
     if not user or not user.is_authenticated:
