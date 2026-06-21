@@ -15,6 +15,11 @@ User = get_user_model()
 # =========================================================
 
 class Project(models.Model):
+    SCOPE_CHOICES = [
+        ('intra_unit', 'پروژهٔ درون‌واحدی'),
+        ('company', 'پروژهٔ شرکتی'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
@@ -22,6 +27,14 @@ class Project(models.Model):
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
+
+    # دامنهٔ پروژه: شرکتی (تاییدِ نهایی با مدیر برنامه‌ریزی) یا درون‌واحدی
+    scope = models.CharField(
+        max_length=16, choices=SCOPE_CHOICES, default='intra_unit',
+        verbose_name="دامنهٔ پروژه",
+        help_text="پروژه‌های شرکتی نیازمندِ تاییدِ نهاییِ گزارش توسطِ مدیرِ برنامه‌ریزی هستند."
+    )
+
     # تقویم کاری الصاق‌شده به پروژه (مستقل تعریف می‌شود و اینجا انتخاب می‌گردد)
     calendar = models.ForeignKey(
         'Calendar', null=True, blank=True,
@@ -32,6 +45,7 @@ class Project(models.Model):
         'CustomUser.OrgUnit', null=True, blank=True,
         on_delete=models.SET_NULL, related_name='owned_projects'
     )
+
     def __str__(self):
         return self.name
 
@@ -731,8 +745,14 @@ class TaskReportLog(models.Model):
         ("completed", "Completed"),
     ]
 
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', 'در انتظار تایید'),
+        ('reviewer_approved', 'تاییدشده توسط بررسی‌کننده'),
+        ('final_approved', 'تایید نهایی'),
+        ('rejected', 'رد شده'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # اتصال به TaskVersion تا گزارش‌ها متعلق به یک نسخه خاص از برنامه باشند
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="report_logs")
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="submitted_reports")
 
@@ -744,8 +764,29 @@ class TaskReportLog(models.Model):
     blockers = models.TextField(blank=True, verbose_name="Critical Blockers")
 
     timestamp = models.DateTimeField(auto_now_add=True)
-    # فیلدهای جدید برای سیستم تایید
-    is_approved = models.BooleanField(default=False, verbose_name="وضعیت تایید")
+
+    # ─── State machine تایید (دو‌مرحله‌ای) ───
+    approval_status = models.CharField(
+        max_length=24, choices=APPROVAL_STATUS_CHOICES, default='pending',
+        verbose_name="وضعیت تایید"
+    )
+
+    # مرحلهٔ ۱: تایید بررسی‌کننده
+    reviewer_approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewer_approved_reports"
+    )
+    reviewer_approved_at = models.DateTimeField(null=True, blank=True)
+
+    # مرحلهٔ ۲: تایید نهایی (فقط برای پروژه‌های شرکتی)
+    final_approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="final_approved_reports"
+    )
+    final_approved_at = models.DateTimeField(null=True, blank=True)
+
+    # فیلدهای قدیمی — نگه‌داشته شده برای سازگاری با کدِ موجود (حذف در آینده)
+    is_approved = models.BooleanField(default=False, verbose_name="وضعیت تایید (legacy)")
     approved_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="approved_reports"
     )
@@ -755,7 +796,7 @@ class TaskReportLog(models.Model):
         ordering = ['-timestamp']
 
     def __str__(self):
-        return f"Report {self.progress_percent}% by {self.user} - Approved: {self.is_approved}"
+        return f"Report {self.progress_percent}% by {self.user} - {self.approval_status}"
 
 
 
@@ -785,3 +826,32 @@ class TaskChatMessage(models.Model):
 # =========================================================
 # مدل‌های جدید برای لایه تسطیح چندپروژه‌ای (Multi-Project Leveling Layer)
 # =========================================================
+
+
+
+# =========================================================
+# 16. SYSTEM SETTINGS (SINGLETON)
+# =========================================================
+
+class SystemSettings(models.Model):
+    """
+    تنظیماتِ کلی سیستم (تک‌ردیفی).
+    شامل تنظیماتِ حاکمیتیِ workflow مانند اجازهٔ bypass تاییدِ بررسی‌کننده.
+    """
+    allow_planning_manager_bypass_reviewer = models.BooleanField(
+        default=False,
+        verbose_name="اجازهٔ bypass تایید بررسی‌کننده توسط مدیر برنامه‌ریزی",
+        help_text="اگر فعال باشد، مدیرِ برنامه‌ریزی می‌تواند گزارش‌های پروژهٔ شرکتی را بدون تاییدِ بررسی‌کننده مستقیماً تایید نهایی کند."
+    )
+
+    class Meta:
+        verbose_name = "تنظیمات سیستم"
+        verbose_name_plural = "تنظیمات سیستم"
+
+    def __str__(self):
+        return "تنظیمات سیستم"
+
+    @classmethod
+    def current(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

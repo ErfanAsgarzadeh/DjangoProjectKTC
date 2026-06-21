@@ -76,7 +76,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['id', 'name', 'description', 'createdAt', 'start_date', 'end_date', 'calendarId', 'calendarName']
+        fields = ['id', 'name', 'description', 'createdAt', 'start_date', 'end_date', 'calendarId', 'calendarName', 'scope']
 
     def get_description(self, obj):
         return ""
@@ -327,19 +327,29 @@ class TaskReportLogSerializer(serializers.ModelSerializer):
             'notes',
             'blockers',
             'timestamp',
-            # فیلدهای مربوط به سیستم تایید که اضافه کردیم:
+            # فیلدهای state machine (دو‌مرحله‌ای)
+            'approval_status',
+            'reviewer_approved_by',
+            'reviewer_approved_at',
+            'final_approved_by',
+            'final_approved_at',
+            # legacy (سازگاری تا فرانت‌اند به‌روزرسانی شود)
             'is_approved',
             'approved_by',
-            'approved_at'
+            'approved_at',
         ]
-        # این فیلدها نباید توسط کاربر عادی هنگام ثبت فرم مقداردهی شوند
         read_only_fields = [
             'id',
             'timestamp',
-            'user',          # بک‌اند خودش از request.user می‌خواند
-            'is_approved',   # فقط از طریق ویوی approve_report تغییر می‌کند
+            'user',
+            'approval_status',
+            'reviewer_approved_by',
+            'reviewer_approved_at',
+            'final_approved_by',
+            'final_approved_at',
+            'is_approved',
             'approved_by',
-            'approved_at'
+            'approved_at',
         ]
 
 class TaskChatMessageSerializer(serializers.ModelSerializer):
@@ -487,3 +497,16 @@ class VarianceReportSerializer(serializers.ModelSerializer):
         # استخراج کد WBS برای این تسک
         tv = obj.task.versions.filter(revision=obj.revision).first()
         return tv.wbs_node.wbs_code if (tv and hasattr(tv, 'wbs_node')) else "N/A"
+
+
+
+# ─── SystemSettings Serializer ────────────────────────────────────────────────
+
+class SystemSettingsSerializer(serializers.ModelSerializer):
+    allowPlanningManagerBypassReviewer = serializers.BooleanField(
+        source='allow_planning_manager_bypass_reviewer'
+    )
+
+    class Meta:
+        model = SystemSettings
+        fields = ['allowPlanningManagerBypassReviewer']

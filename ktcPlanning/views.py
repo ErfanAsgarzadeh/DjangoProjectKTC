@@ -18,7 +18,7 @@ from .cpm import CPMEngine
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
     TaskActual, TaskChatMessage, Assignment, Resource, ResourcePool, ResourceRole, ResourceSkill, ResourceSkillMapping, \
-    ResourceException, ResourceRate, VarianceReport, Calendar
+    ResourceException, ResourceRate, VarianceReport, Calendar, ProjectViewer, SystemSettings
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
@@ -28,7 +28,7 @@ from .serializers import (
     TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer, ResourcePoolSerializer,
     ResourceRoleSerializer, ResourceSkillSerializer, ResourceSerializer, ResourceSkillMappingSerializer,
     ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer,
-    CalendarSerializer
+    CalendarSerializer, ProjectViewerSerializer, SystemSettingsSerializer
 )
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -190,17 +190,20 @@ class RevisionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # تاییدکننده‌ی تعیین‌شده (اختیاری ولی توصیه‌شده)
-        approver_id = request.data.get('designatedApproverId') or request.data.get('approverId')
-        designated_approver = None
+        # تعیینِ Approver در زمانِ ساختِ نسخه — scope-aware:
+        # شرکتی → پیش‌فرض = مدیرِ برنامه‌ریزی
+        # درون‌واحدی → پیش‌فرض = مدیرِ واحدِ صاحبِ پروژه
+        # override دستی همیشه ممکن است (approverId / approver_id)
+        from .permissions import get_planning_manager as _get_pm
+        approver_id = request.data.get('approverId') or request.data.get('approver_id')
         if approver_id:
-            try:
-                designated_approver = User.objects.get(pk=approver_id)
-            except User.DoesNotExist:
-                return Response(
-                    {"detail": "کاربر تاییدکننده یافت نشد."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            approver = get_object_or_404(User, pk=approver_id)
+        elif getattr(base_revision.project, 'scope', 'intra_unit') == 'company':
+            approver = _get_pm() or request.user
+        else:
+            # درون‌واحدی: مدیرِ واحدِ صاحبِ پروژه → fallback به سازنده
+            ou = getattr(base_revision.project, 'owner_unit', None)
+            approver = (ou.manager if ou and ou.manager else request.user)
 
         new_revision_number = Revision.objects.filter(project=base_revision.project).count() + 1
         new_revision = Revision.objects.create(
@@ -566,88 +569,204 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(task_id=task_id)
 
         if for_approval == 'true':
-            queryset = queryset.filter(
-                task__roles__user=self.request.user,
+            user = self.request.user
+            from .models import SystemSettings
+            from .permissions import is_planning_manager as _is_pm
+            from django.db.models import Q
+
+            # صف بررسی‌کننده: گزارش‌هایی با وضعیت pending که کاربر روی تسکشان reviewer/PM است
+            reviewer_q = Q(
+                approval_status='pending',
+                task__roles__user=user,
                 task__roles__role__in=['reviewer', 'project manager'],
-                is_approved=False  # نمایش گزارش‌هایی که هنوز تایید نشده‌اند
-            ).distinct()
+            )
+            # صف مدیر برنامه‌ریزی: گزارش‌های reviewer_approved از پروژه‌های شرکتی
+            planning_q = Q(
+                approval_status='reviewer_approved',
+                task__project__scope='company',
+            ) if _is_pm(user) or is_company_level(user) else Q(pk=None)  # empty
+
+            queryset = queryset.filter(reviewer_q | planning_q).distinct()
+
         return queryset
 
-
     def perform_create(self, serializer):
-        # فقط ثبت گزارش در حالت "در انتظار تایید"
         serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
         report = serializer.instance
-        # جلوگیری از ویرایش پس از تایید
-        if report.is_approved:
-            raise PermissionDenied("این گزارش قبلاً تایید شده و دیگر قابل ویرایش نیست.")
+        # جلوگیری از ویرایش پس از تایید (هر مرحله)
+        if report.approval_status != 'pending':
+            raise PermissionDenied("این گزارش در حال بررسی یا تایید شده و دیگر قابل ویرایش نیست.")
         serializer.save()
 
     @action(detail=True, methods=['post'], url_path='approve')
     def approve_report(self, request, pk=None):
-        """تایید گزارش و اعمال پیشرفت روی تسک اصلی (گانت‌چارت)"""
+        """
+        تاییدِ گزارش (دو‌مرحله‌ای):
+        - مرحلهٔ ۱: بررسی‌کننده (reviewer / project manager روی تسک) → reviewer_approved
+          برای پروژهٔ درون‌واحدی: auto-collapse به final_approved.
+        - مرحلهٔ ۲: مدیرِ برنامه‌ریزی (یا company-level) → final_approved (فقط شرکتی).
+        - Bypass: اگر SystemSettings.allow_planning_manager_bypass_reviewer فعال باشد،
+          مدیرِ برنامه‌ریزی می‌تواند مستقیماً از pending به final_approved ببرد.
+        پیشرفت در TaskActual فقط هنگامِ final_approved ثبت می‌شود.
+        """
+        from .models import SystemSettings
+        from .permissions import is_planning_manager as _is_pm
+
         report = self.get_object()
+        user = request.user
+        project = report.task.project
+        now = timezone.now()
 
-        # ۱. بررسی اینکه آیا گزارش قبلاً تایید شده است یا خیر
-        if report.is_approved:
-            return Response({"detail": "این گزارش قبلاً تایید شده است."}, status=status.HTTP_400_BAD_REQUEST)
+        if report.approval_status == 'final_approved':
+            return Response({"detail": "این گزارش قبلاً تایید نهایی شده است."}, status=status.HTTP_400_BAD_REQUEST)
+        if report.approval_status == 'rejected':
+            return Response({"detail": "این گزارش رد شده و قابلِ تایید نیست."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ۲. بررسی سطح دسترسی کاربر برای تایید این تسک خاص
-        has_permission = TaskRole.objects.filter(
-            task=report.task,
-            user=request.user,
+        # ────────── Bypass path ──────────
+        if (report.approval_status == 'pending'
+                and project.scope == 'company'
+                and (_is_pm(user) or is_company_level(user))
+                and SystemSettings.current().allow_planning_manager_bypass_reviewer):
+            report.approval_status = 'final_approved'
+            report.reviewer_approved_by = user
+            report.reviewer_approved_at = now
+            report.final_approved_by = user
+            report.final_approved_at = now
+            # سازگاری legacy
+            report.is_approved = True
+            report.approved_by = user
+            report.approved_at = now
+            report.save()
+            self._commit_progress(report, user)
+            return Response({
+                "detail": "گزارش با bypass مستقیماً تایید نهایی شد.",
+                "approvalStatus": "final_approved",
+                "viaBypass": True,
+            }, status=status.HTTP_200_OK)
+
+        # ────────── مرحلهٔ ۱: تاییدِ بررسی‌کننده ──────────
+        if report.approval_status == 'pending':
+            is_reviewer = TaskRole.objects.filter(
+                task=report.task, user=user,
+                role__in=['reviewer', 'project manager']
+            ).exists()
+            if not (is_reviewer or is_company_level(user)):
+                raise PermissionDenied("فقط بررسی‌کنندهٔ تسک می‌تواند تاییدِ مرحلهٔ اول بدهد.")
+
+            report.reviewer_approved_by = user
+            report.reviewer_approved_at = now
+
+            # درون‌واحدی → auto-collapse: همین مرحله نهایی است
+            if project.scope == 'intra_unit':
+                report.approval_status = 'final_approved'
+                report.final_approved_by = user
+                report.final_approved_at = now
+                report.is_approved = True
+                report.approved_by = user
+                report.approved_at = now
+                report.save()
+                self._commit_progress(report, user)
+                return Response({
+                    "detail": "گزارش تایید شد و پیشرفت تسک به‌روزرسانی گردید.",
+                    "approvalStatus": "final_approved",
+                }, status=status.HTTP_200_OK)
+            else:
+                # شرکتی → منتظرِ تاییدِ نهاییِ مدیرِ برنامه‌ریزی
+                report.approval_status = 'reviewer_approved'
+                report.save()
+                return Response({
+                    "detail": "گزارش توسط بررسی‌کننده تایید شد. در انتظار تایید نهایی مدیر برنامه‌ریزی.",
+                    "approvalStatus": "reviewer_approved",
+                }, status=status.HTTP_200_OK)
+
+        # ────────── مرحلهٔ ۲: تایید نهاییِ مدیر برنامه‌ریزی ──────────
+        elif report.approval_status == 'reviewer_approved':
+            if project.scope != 'company':
+                return Response(
+                    {"detail": "این پروژه درون‌واحدی است و نیازی به تایید نهایی جداگانه ندارد."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not (_is_pm(user) or is_company_level(user)):
+                raise PermissionDenied(
+                    "تاییدِ نهاییِ گزارش‌های پروژه‌های شرکتی فقط توسط مدیرِ واحدِ برنامه‌ریزی مجاز است."
+                )
+            report.approval_status = 'final_approved'
+            report.final_approved_by = user
+            report.final_approved_at = now
+            report.is_approved = True
+            report.approved_by = user
+            report.approved_at = now
+            report.save()
+            self._commit_progress(report, user)
+            return Response({
+                "detail": "گزارش تایید نهایی شد و پیشرفت تسک به‌روزرسانی گردید.",
+                "approvalStatus": "final_approved",
+            }, status=status.HTTP_200_OK)
+
+        return Response({"detail": "وضعیت نامعتبر."}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='reject')
+    def reject_report(self, request, pk=None):
+        """ردِ گزارش توسط بررسی‌کننده یا مدیر برنامه‌ریزی."""
+        report = self.get_object()
+        user = request.user
+
+        if report.approval_status == 'final_approved':
+            return Response({"detail": "این گزارش قبلاً تایید نهایی شده و قابلِ رد نیست."}, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = request.data.get('reason', '').strip()
+
+        is_reviewer = TaskRole.objects.filter(
+            task=report.task, user=user,
             role__in=['reviewer', 'project manager']
         ).exists()
+        from .permissions import is_planning_manager as _is_pm
+        if not (is_reviewer or _is_pm(user) or is_company_level(user)):
+            raise PermissionDenied("شما اجازهٔ رد کردن این گزارش را ندارید.")
 
-        if not has_permission:
-            raise PermissionDenied("شما دسترسی لازم (مدیر پروژه یا بررسی‌کننده) برای تایید گزارش این تسک را ندارید.")
-
-        # ۳. تغییر وضعیت گزارش به تایید شده
-        report.is_approved = True
-        report.approved_by = request.user
-        report.approved_at = timezone.now()
+        report.approval_status = 'rejected'
+        if reason:
+            report.notes = f"REJECTED: {reason}\n---\n{report.notes}"
         report.save()
+        return Response({"detail": "گزارش رد شد.", "approvalStatus": "rejected"}, status=status.HTTP_200_OK)
 
-        # ۴. اعمال پیشرفت در TaskActual
+    # ────────── Helper: ثبتِ پیشرفت در TaskActual ──────────
+    def _commit_progress(self, report, user):
+        """ثبتِ پیشرفت فقط هنگامِ final_approved — فراخوانی خارج از این حالت مجاز نیست."""
         active_task_version = TaskVersion.objects.filter(
             task=report.task,
-            revision__approved_at__isnull=True,  # نسخه‌ای که هنوز باز است
+            revision__approved_at__isnull=True,
             is_deleted=False
         ).first()
 
-        if active_task_version:
-            task_actual, created = TaskActual.objects.get_or_create(
-                task_version=active_task_version,
-                defaults={'updated_by': request.user}
-            )
-            task_actual.progress = report.progress_percent
+        if not active_task_version:
+            return
 
-            # ──────────────────────────────────────────────
-            # محاسبه خودکار شروع/پایان واقعی از روی ریپورت‌های تاییدشده
-            # (فقط اگر مستقیماً وارد نشده باشند)
-            # ──────────────────────────────────────────────
-            approved_reports = TaskReportLog.objects.filter(
-                task=report.task, is_approved=True
-            ).order_by('timestamp')
+        task_actual, _ = TaskActual.objects.get_or_create(
+            task_version=active_task_version,
+            defaults={'updated_by': user}
+        )
+        task_actual.progress = report.progress_percent
 
-            # actual_start = زمان اولین ریپورتِ دارای پیشرفت (> 0)
-            if task_actual.actual_start is None:
-                first_progress = approved_reports.filter(progress_percent__gt=0).first()
-                if first_progress:
-                    task_actual.actual_start = first_progress.timestamp
+        # محاسبه خودکار actual_start/finish
+        approved_reports = TaskReportLog.objects.filter(
+            task=report.task, approval_status='final_approved'
+        ).order_by('timestamp')
 
-            # actual_finish = زمان اولین ریپورتی که پیشرفت به ۱۰۰٪ رسیده
-            if task_actual.actual_finish is None:
-                completion = approved_reports.filter(progress_percent__gte=100).first()
-                if completion:
-                    task_actual.actual_finish = completion.timestamp
+        if task_actual.actual_start is None:
+            first_progress = approved_reports.filter(progress_percent__gt=0).first()
+            if first_progress:
+                task_actual.actual_start = first_progress.timestamp
 
-            task_actual.updated_by = request.user
-            task_actual.save()
+        if task_actual.actual_finish is None:
+            completion = approved_reports.filter(progress_percent__gte=100).first()
+            if completion:
+                task_actual.actual_finish = completion.timestamp
 
-        return Response({"detail": "گزارش تایید شد و پیشرفت تسک به‌روزرسانی گردید."}, status=status.HTTP_200_OK)
+        task_actual.updated_by = user
+        task_actual.save()
 class TaskChatMessageViewSet(viewsets.ModelViewSet):
     queryset = TaskChatMessage.objects.all()
     serializer_class = TaskChatMessageSerializer
@@ -1280,3 +1399,34 @@ class VarianceReportViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# ─── SystemSettings endpoint (singleton) ──────────────────────────────────────
+
+class SystemSettingsView(APIView):
+    """
+    GET: خواندنِ تنظیماتِ کلیِ سیستم (هر کاربرِ احرازشده).
+    PUT/PATCH: ویرایش فقط توسطِ سطحِ شرکت (company_admin / company_pm / superuser).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        settings_obj = SystemSettings.current()
+        serializer = SystemSettingsSerializer(settings_obj)
+        return Response(serializer.data)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request)
+
+    def _update(self, request):
+        if not is_company_level(request.user):
+            raise PermissionDenied("ویرایشِ تنظیماتِ سیستم فقط برای کاربرانِ سطحِ شرکت مجاز است.")
+        settings_obj = SystemSettings.current()
+        serializer = SystemSettingsSerializer(settings_obj, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
