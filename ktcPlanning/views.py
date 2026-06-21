@@ -238,7 +238,7 @@ class RevisionViewSet(viewsets.ModelViewSet):
             description=description,
             project_start=base_revision.project_start,
             created_by=request.user,
-            designated_approver=designated_approver,
+            designated_approver=approver,
         )
 
         old_to_new_wbs_map = {}

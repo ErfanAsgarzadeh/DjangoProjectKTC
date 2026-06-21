@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('ktcPlanning', '0006_revision_approver_projectviewer'),
+        ('ktcPlanning', '0006_revision_designated_approver'),
     ]
 
     operations = [
