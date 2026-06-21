@@ -18,7 +18,7 @@ from .cpm import CPMEngine
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
     TaskActual, TaskChatMessage, Assignment, Resource, ResourcePool, ResourceRole, ResourceSkill, ResourceSkillMapping, \
-    ResourceException, ResourceRate, VarianceReport
+    ResourceException, ResourceRate, VarianceReport, Calendar
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
@@ -27,7 +27,8 @@ from .serializers import (
     DependencySerializer,
     TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer, ResourcePoolSerializer,
     ResourceRoleSerializer, ResourceSkillSerializer, ResourceSerializer, ResourceSkillMappingSerializer,
-    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer
+    ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer,
+    CalendarSerializer
 )
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -38,6 +39,7 @@ from .variance_engine import EVMEngine
 from .permissions import (
     can_create_project, can_edit_project, require_can_create_project,
     require_can_edit_project, is_company_level,
+    accessible_project_ids, accessible_projects, can_view_project,
 )
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -68,7 +70,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
 
-    # مشاهده برای همه آزاد است (get_queryset فیلتر نمی‌کند)
+    def get_queryset(self):
+        # فقط پروژه‌هایی که کاربر اجازهٔ مشاهده دارد (سطحِ شرکت → همه).
+        return super().get_queryset().filter(
+            id__in=accessible_project_ids(self.request.user)
+        )
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -114,6 +120,7 @@ class RevisionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(project_id__in=accessible_project_ids(self.request.user))
         project_id = self.request.query_params.get('project_id')
         if project_id:
             queryset = queryset.filter(project_id=project_id)
@@ -323,6 +330,7 @@ class WbsNodeViewSet(viewsets.ModelViewSet):
         return obj
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
         revision_id = self.request.query_params.get('revision_id')
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
@@ -462,6 +470,7 @@ class ActivityNodeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
         revision_id = self.request.query_params.get('revision_id')
         user_id = self.request.query_params.get('user_id')  # <--- فیلتر جدید
 
@@ -518,6 +527,7 @@ class DependencyViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
         revision_id = self.request.query_params.get('revision_id')
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
@@ -548,6 +558,7 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(task__project_id__in=accessible_project_ids(self.request.user))
         task_id = self.request.query_params.get('task_id')
         for_approval = self.request.query_params.get('for_approval')
 
@@ -645,6 +656,7 @@ class TaskChatMessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(task__project_id__in=accessible_project_ids(self.request.user))
         task_id = self.request.query_params.get('task_id')
         if task_id:
             queryset = queryset.filter(task_id=task_id)
@@ -662,6 +674,7 @@ class TaskRoleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
 
         # امکان فیلتر کردن دیتای برگشتی
         revision_id = self.request.query_params.get('revision_id')
@@ -819,6 +832,10 @@ class ResourceHistogramView(APIView):
             revision = Revision.objects.get(pk=revision_id)
         except Revision.DoesNotExist:
             return Response({"detail": "Revision not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # محدودسازیِ خواندن: کاربر باید به پروژهٔ این نسخه دسترسیِ مشاهده داشته باشد.
+        if not can_view_project(request.user, revision.project):
+            return Response({"detail": "شما به این پروژه دسترسی ندارید."}, status=status.HTTP_403_FORBIDDEN)
 
         granularity = request.query_params.get("granularity", "day")
         if granularity not in ("day", "week", "month"):
@@ -1060,6 +1077,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         فقط رکوردهای همان نسخه برگشت داده شود.
         """
         queryset = super().get_queryset()
+        queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
         revision_id = self.request.query_params.get('revision_id')
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
@@ -1241,6 +1259,7 @@ class VarianceReportViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
         revision_id = self.request.query_params.get('revision_id')
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
