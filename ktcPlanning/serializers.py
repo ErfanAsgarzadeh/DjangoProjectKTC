@@ -398,11 +398,9 @@ class TaskChatMessageSerializer(serializers.ModelSerializer):
         return None
 
     def validate_file(self, value):
-        """لایه دفاعی دوم: همان validator مدل را در serializer هم صدا می‌زنیم
-        تا پیام خطا به‌درستی در response body برگردد."""
         if value:
-            from ktcPlanning.validators import validate_chat_file
-            validate_chat_file(value)
+            from ktcPlanning.validators import ChatFileValidator
+            ChatFileValidator()(value)
         return value
 
     def create(self, validated_data):
