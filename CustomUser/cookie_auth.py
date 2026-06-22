@@ -90,17 +90,21 @@ class CookieTokenObtainPairView(APIView):
         access  = serializer.validated_data["access"]
         refresh = serializer.validated_data["refresh"]
 
-        # اطلاعات پروفایل کاربر را هم برگردان تا فرانت‌اند یک request کمتر بزند
+        # گرفتن یوزر از طریق توکن
+        from rest_framework_simplejwt.tokens import AccessToken
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        decoded = AccessToken(access)
+        user = User.objects.get(id=decoded["user_id"])
+
         from CustomUser.serializers import CustomUserSerializer
-        user_data = CustomUserSerializer(request.user if request.user.is_authenticated else serializer.user).data
+        user_data = CustomUserSerializer(user).data
 
         response = Response(
             {"detail": "Login successful.", "user": user_data},
             status=status.HTTP_200_OK,
         )
         _set_auth_cookies(response, access, refresh)
-
-        # CSRF token را هم در header برگردان تا فرانت‌اند بتواند mutation‌ها را ارسال کند
         response["X-CSRFToken"] = get_token(request)
         return response
 
