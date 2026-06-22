@@ -40,6 +40,7 @@ from .permissions import (
     can_create_project, can_edit_project, require_can_create_project,
     require_can_edit_project, is_company_level,
     accessible_project_ids, accessible_projects, can_view_project,
+    require_can_manage_viewers,
 )
 from django.contrib.auth import get_user_model
 User = get_user_model()

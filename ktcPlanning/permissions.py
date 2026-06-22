@@ -207,6 +207,104 @@ def require_can_manage_viewers(user, project):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Task-level role helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def is_task_reviewer(user, task) -> bool:
+    """
+    آیا این کاربر روی این تسک نقشِ reviewer یا project manager دارد؟
+    فقط نقش‌های موجود در نسخهٔ بازِ پروژه را در نظر می‌گیرد.
+    """
+    if not user or not user.is_authenticated or not task:
+        return False
+    from .models import TaskRole
+    return TaskRole.objects.filter(
+        task=task,
+        user=user,
+        role__in=['reviewer', 'project manager'],
+        revision__approved_at__isnull=True,
+    ).exists()
+
+
+def can_assign_task_role(actor, task, target_user, role) -> bool:
+    """
+    آیا «actor» اجازه دارد «target_user» را با نقش «role» روی این «task» تخصیص دهد؟
+
+    قواعد:
+      - superuser / company_admin / company_pm → همیشه مجاز
+      - role == 'reviewer'  → actor باید can_edit_project داشته باشد، و target_user عضوِ یک واحد باشد
+      - role == 'executor'  → actor باید خودش reviewer این تسک باشد، و target_user هم‌واحدِ actor باشد
+      - role == 'project manager' → فقط سطحِ شرکت
+      - role == 'owner'    → فقط can_edit_project
+    """
+    if not actor or not actor.is_authenticated:
+        return False
+    if not task or not target_user:
+        return False
+
+    if is_company_level(actor):
+        return True
+
+    if role == 'reviewer':
+        if not can_edit_project(actor, task.project):
+            return False
+        # target_user باید به یک واحد وصل باشد
+        return getattr(target_user, 'unit_id', None) is not None
+
+    if role == 'executor':
+        # actor باید reviewer این تسک باشد
+        if not is_task_reviewer(actor, task):
+            return False
+        # actor باید واحد داشته باشد
+        actor_unit = getattr(actor, 'unit_id', None)
+        if not actor_unit:
+            return False
+        # target_user باید هم‌واحدِ actor باشد
+        return getattr(target_user, 'unit_id', None) == actor_unit
+
+    if role == 'project manager':
+        # نقشِ مدیر پروژه فقط توسطِ سطحِ شرکت قابلِ تخصیص است
+        return False  # is_company_level قبلاً بالا چک شد
+
+    if role == 'owner':
+        return can_edit_project(actor, task.project)
+
+    return False
+
+
+def require_can_assign_task_role(actor, task, target_user, role):
+    if not can_assign_task_role(actor, task, target_user, role):
+        raise PermissionDenied(
+            f"شما اجازه‌ی تخصیصِ نقشِ «{role}» را روی این تسک ندارید."
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Revision approval
+# ─────────────────────────────────────────────────────────────────────────────
+
+def can_approve_revision(user, revision) -> bool:
+    """
+    آیا کاربر می‌تواند این revision را تایید (قفل) کند؟
+      - superuser / company_admin همیشه مجاز
+      - designated_approver که هنگام ساختِ نسخه تعیین شده است
+    """
+    if not user or not user.is_authenticated or not revision:
+        return False
+    if user.is_superuser or _role(user) == 'company_admin':
+        return True
+    designated_id = getattr(revision, 'designated_approver_id', None)
+    return designated_id == user.id
+
+
+def require_can_approve_revision(user, revision):
+    if not can_approve_revision(user, revision):
+        raise PermissionDenied(
+            "تاییدِ این نسخه فقط توسطِ تاییدکنندهٔ تعیین‌شده مجاز است."
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DRF BasePermission classes — ایمن‌ترین مسیر برای endpointهای مدیریتی
 # ─────────────────────────────────────────────────────────────────────────────
 
