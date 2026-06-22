@@ -29,10 +29,21 @@ def _role(user):
 
 
 def is_company_level(user) -> bool:
-    """مدیرِ سیستم یا مدیرِ پروژه‌های شرکت (یا superuser)."""
+    """مدیرِ سیستم یا مدیرِ پروژه‌های شرکت (یا superuser). — برای دسترسیِ پروژه‌ها."""
     if not user or not user.is_authenticated:
         return False
     return user.is_superuser or _role(user) in ('company_admin', 'company_pm')
+
+
+def is_system_admin(user) -> bool:
+    """
+    فقط مدیرِ سیستم (company_admin) یا superuser.
+    برای کارهای ادمینیِ سیستم مثل مدیریتِ کاربران و واحدها استفاده می‌شود.
+    توجه: company_pm (مدیرِ پروژهٔ شرکت) عمداً اینجا مجاز نیست — او فقط پروژه‌ها را مدیریت می‌کند.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    return user.is_superuser or _role(user) == 'company_admin'
 
 
 def can_create_project(user) -> bool:
@@ -231,14 +242,27 @@ class CanManageUsers(BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
-        if is_company_level(user):
+        if is_system_admin(user):
             return True
         # «مدیرِ واحد» واقعی = کسی که حداقل یک OrgUnit.manager او باشد
         return user.managed_units.exists()
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if is_company_level(user):
+        if is_system_admin(user):
             return True
         managed_ids = set(user.managed_units.values_list('id', flat=True))
         return obj.unit_id in managed_ids
+
+
+class IsSystemAdminOrReadOnly(BasePermission):
+    """خواندن: هر کاربرِ احرازشده. نوشتن: فقط مدیرِ سیستم (company_admin / superuser)."""
+    message = "ویرایش این منبع فقط برای مدیرِ سیستم مجاز است."
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return is_system_admin(user)
