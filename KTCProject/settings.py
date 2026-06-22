@@ -31,12 +31,25 @@ except ImportError:
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: in production these MUST be provided via environment variables.
-# Defaults below are for local development only.
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-hkg4*npzvsfhxo_2&twus94%ju+b6#e2c59r-@g@87(5prnb4u',
-)
+# SECURITY WARNING: در production حتماً باید از environment variable تنظیم شود.
+# در حالت development اگر متغیر تنظیم نشده باشد، یک خطای واضح نمایش داده می‌شود
+# تا توسعه‌دهنده مجبور شود فایل .env را تنظیم کند.
+_secret_key_env = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+if not _secret_key_env:
+    import sys
+    # در محیط تست (pytest) یک مقدار موقت می‌دهیم تا تست‌ها کار کنند
+    if 'pytest' in sys.modules or 'test' in sys.argv:
+        _secret_key_env = 'test-secret-key-only-for-testing-never-use-in-production'
+    else:
+        raise RuntimeError(
+            "\n\n"
+            "❌ DJANGO_SECRET_KEY تنظیم نشده است!\n"
+            "   لطفاً فایل .env را از روی .env.example بسازید و مقدار آن را تنظیم کنید:\n"
+            "   cp .env.example .env\n"
+            "   سپس DJANGO_SECRET_KEY را با یک رشته تصادفی طولانی پر کنید.\n"
+            "   برای تولید کلید: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\"\n"
+        )
+SECRET_KEY = _secret_key_env
 
 # DEBUG: defaults to True for local dev. Set DJANGO_DEBUG=0 in production.
 DEBUG = os.environ.get('DJANGO_DEBUG', '1').lower() not in ('0', 'false', 'no')
@@ -172,15 +185,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 AUTH_USER_MODEL = 'CustomUser.CustomUser'
 
-CORS_ALLOW_ALL_ORIGINS = False # برای امنیت بیشتر بهتر است False باشد
+CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://192.168.50.78:8000"
 ]
 
-# اجازه دادن به ارسال هدرهای احراز هویت (Token)
+# اجازه دادن به ارسال cookie در cross-origin requests (لازم برای httpOnly Cookie auth)
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
@@ -188,9 +200,16 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# تنظیمات امنیتی Cookie
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = False   # False تا فرانت‌اند بتواند آن را بخواند و در header بفرستد
+CSRF_COOKIE_SAMESITE = 'Lax'
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # ابتدا از httpOnly Cookie می‌خواند، سپس fallback به Authorization header
+        'CustomUser.authentication.CookieJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
