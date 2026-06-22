@@ -30,7 +30,7 @@ from .serializers import (
     ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer,
     CalendarSerializer, ProjectViewerSerializer, SystemSettingsSerializer
 )
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from .msp_importer import import_msp_xml
 from django.db.models import Max
@@ -797,7 +797,7 @@ class TaskChatMessageViewSet(viewsets.ModelViewSet):
     queryset = TaskChatMessage.objects.all()
     serializer_class = TaskChatMessageSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         queryset = super().get_queryset()
