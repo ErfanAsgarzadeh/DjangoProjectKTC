@@ -55,5 +55,13 @@ class CustomUser(AbstractUser):
     )
     org_role = models.CharField(max_length=20, choices=ORG_ROLES, default="member", verbose_name="نقش سازمانی")
 
+    # کنترلِ دسترسی در سطحِ صفحه (منو). null = دسترسی به همهٔ صفحات (پیش‌فرض).
+    # در غیر این صورت لیستی از مسیرهای مجاز، مثلاً ["/DashBoard/Home", "/DashBoard/MyTask"].
+    allowed_pages = models.JSONField(
+        null=True, blank=True, default=None,
+        verbose_name="صفحاتِ مجاز",
+        help_text="null یعنی دسترسی به همهٔ صفحات. در غیر این صورت لیستِ مسیرهای مجاز."
+    )
+
     def __str__(self):
         return f"{self.username}({self.job_title if self.job_title else self.username})"

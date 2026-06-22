@@ -56,13 +56,15 @@ class CustomUserSerializer(serializers.ModelSerializer):
     unitId = serializers.PrimaryKeyRelatedField(source='unit', read_only=True)
     unitName = serializers.CharField(source='unit.name', read_only=True, default=None)
     orgRole = serializers.CharField(source='org_role', read_only=True)
+    # صفحاتِ مجاز — فقط خواندنی اینجا (تا navbar کاربرِ جاری بتواند منو را فیلتر کند).
+    allowedPages = serializers.JSONField(source='allowed_pages', read_only=True)
 
     class Meta:
         model = CustomUser
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'jobTitle', 'employeeCode', 'password',
-            'unitId', 'unitName', 'orgRole'
+            'unitId', 'unitName', 'orgRole', 'allowedPages'
         ]
 
         extra_kwargs = {
@@ -115,13 +117,15 @@ class AdminUserManagementSerializer(serializers.ModelSerializer):
     )
     unitName = serializers.CharField(source='unit.name', read_only=True, default=None)
     orgRole = serializers.CharField(source='org_role', required=False)
+    # صفحاتِ مجاز — قابلِ ویرایش توسطِ ادمین. null = دسترسی به همه.
+    allowedPages = serializers.JSONField(source='allowed_pages', required=False, allow_null=True)
 
     class Meta:
         model = CustomUser
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'jobTitle', 'employeeCode', 'password',
-            'unitId', 'unitName', 'orgRole'
+            'unitId', 'unitName', 'orgRole', 'allowedPages'
         ]
         extra_kwargs = {
             'password': {'write_only': True, 'required': False}
@@ -167,6 +171,14 @@ class AdminUserManagementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "شما اجازه‌ی انتسابِ کاربر به این واحد را ندارید."
             )
+        return value
+
+    def validate_allowedPages(self, value):
+        # null = دسترسی به همه؛ در غیر این صورت باید لیستی از مسیرها (رشته) باشد.
+        if value is None:
+            return value
+        if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
+            raise serializers.ValidationError("صفحاتِ مجاز باید null یا لیستی از مسیرها باشد.")
         return value
 
     def create(self, validated_data):
