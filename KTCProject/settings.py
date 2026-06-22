@@ -124,6 +124,7 @@ WSGI_APPLICATION = 'KTCProject.wsgi.application'
 _DB_ENGINE = os.environ.get('DB_ENGINE', 'postgres').lower()
 
 if _DB_ENGINE in ('sqlite', 'sqlite3'):
+    print('sqlitttttt')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -134,9 +135,9 @@ else:
     DATABASES = {
         'default': {
             'ENGINE':       'django.db.backends.postgresql',
-            'NAME':         os.environ.get('POSTGRES_DB',       'ktcproject'),
-            'USER':         os.environ.get('POSTGRES_USER',     'ktc_user'),
-            'PASSWORD':     os.environ.get('POSTGRES_PASSWORD', ''),
+            'NAME':         os.environ.get('POSTGRES_DB',       'noviraDB'),
+            'USER':         os.environ.get('POSTGRES_USER',     'erfanAdmin'),
+            'PASSWORD':     os.environ.get('POSTGRES_PASSWORD', 'erfan315'),
             'HOST':         os.environ.get('POSTGRES_HOST',     '127.0.0.1'),
             'PORT':         os.environ.get('POSTGRES_PORT',     '5432'),
             # Persistent connections for better performance under load.

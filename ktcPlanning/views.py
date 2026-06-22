@@ -30,7 +30,7 @@ from .serializers import (
     ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer,
     CalendarSerializer, ProjectViewerSerializer, SystemSettingsSerializer
 )
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from .msp_importer import import_msp_xml
 from django.db.models import Max
@@ -41,7 +41,6 @@ from .permissions import (
     require_can_edit_project, is_company_level,
     accessible_project_ids, accessible_projects, can_view_project,
 )
-from auditlog.services import log_event
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
@@ -171,10 +170,6 @@ class RevisionViewSet(viewsets.ModelViewSet):
         revision.approved_by = request.user
         revision.approved_at = timezone.now()
         revision.save()
-
-        log_event('lock_revision', target=revision, category='business',
-                  extra={'project_id': str(revision.project_id), 'number': revision.number},
-                  request=request)
 
         return Response({"detail": "نسخه با موفقیت قفل شد."}, status=status.HTTP_200_OK)
 
@@ -671,14 +666,12 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
             report.approved_at = now
             report.save()
             self._commit_progress(report, user)
-            log_event('approve_report_bypass', target=report, category='business',
-                      extra={'progress_percent': report.progress_percent},
-                      request=request)
             return Response({
                 "detail": "گزارش با bypass مستقیماً تایید نهایی شد.",
                 "approvalStatus": "final_approved",
                 "viaBypass": True,
             }, status=status.HTTP_200_OK)
+
         # ────────── مرحلهٔ ۱: تاییدِ بررسی‌کننده ──────────
         if report.approval_status == 'pending':
             is_reviewer = TaskRole.objects.filter(
@@ -701,9 +694,6 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
                 report.approved_at = now
                 report.save()
                 self._commit_progress(report, user)
-                log_event('approve_report_final', target=report, category='business',
-                          extra={'progress_percent': report.progress_percent, 'scope': 'intra_unit'},
-                          request=request)
                 return Response({
                     "detail": "گزارش تایید شد و پیشرفت تسک به‌روزرسانی گردید.",
                     "approvalStatus": "final_approved",
@@ -712,9 +702,6 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
                 # شرکتی → منتظرِ تاییدِ نهاییِ مدیرِ برنامه‌ریزی
                 report.approval_status = 'reviewer_approved'
                 report.save()
-                log_event('approve_report_reviewer', target=report, category='business',
-                          extra={'progress_percent': report.progress_percent},
-                          request=request)
                 return Response({
                     "detail": "گزارش توسط بررسی‌کننده تایید شد. در انتظار تایید نهایی مدیر برنامه‌ریزی.",
                     "approvalStatus": "reviewer_approved",
@@ -739,9 +726,6 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
             report.approved_at = now
             report.save()
             self._commit_progress(report, user)
-            log_event('approve_report_final', target=report, category='business',
-                      extra={'progress_percent': report.progress_percent, 'scope': 'company'},
-                      request=request)
             return Response({
                 "detail": "گزارش تایید نهایی شد و پیشرفت تسک به‌روزرسانی گردید.",
                 "approvalStatus": "final_approved",
@@ -772,8 +756,6 @@ class TaskReportLogViewSet(viewsets.ModelViewSet):
         if reason:
             report.notes = f"REJECTED: {reason}\n---\n{report.notes}"
         report.save()
-        log_event('reject_report', target=report, category='business',
-                  extra={'reason': reason}, request=request)
         return Response({"detail": "گزارش رد شد.", "approvalStatus": "rejected"}, status=status.HTTP_200_OK)
 
     # ────────── Helper: ثبتِ پیشرفت در TaskActual ──────────
@@ -815,7 +797,7 @@ class TaskChatMessageViewSet(viewsets.ModelViewSet):
     queryset = TaskChatMessage.objects.all()
     serializer_class = TaskChatMessageSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         queryset = super().get_queryset()

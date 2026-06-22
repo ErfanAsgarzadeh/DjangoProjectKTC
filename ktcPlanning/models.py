@@ -32,9 +32,9 @@ class Project(models.Model):
 
     # دامنهٔ پروژه: شرکتی (تاییدِ نهایی با مدیر برنامه‌ریزی) یا درون‌واحدی
     scope = models.CharField(
-        max_length=16, choices=SCOPE_CHOICES, default='intra_unit',
+        max_length=16, choices=SCOPE_CHOICES, default='company',
         verbose_name="دامنهٔ پروژه",
-        help_text="پروژه‌های شرکتی نیازمندِ تاییدِ نهاییِ گزارش توسطِ مدیرِ برنامه‌ریزی هستند."
+        help_text="پروژه‌های شرکتی نیازمندِ تاییدِ نهاییِ گزارش توسطِ مدیرِ برنامه‌ریزی هستند.",
     )
 
     # تقویم کاری الصاق‌شده به پروژه (مستقل تعریف می‌شود و اینجا انتخاب می‌گردد)
