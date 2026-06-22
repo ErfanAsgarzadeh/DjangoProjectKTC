@@ -14,7 +14,8 @@ from .serializers import (
 # helperهای موجود (is_company_level, ...) سازگار بمانند.
 from ktcPlanning.permissions import (
     is_company_level,
-    IsCompanyLevelOrReadOnly,
+    is_system_admin,
+    IsSystemAdminOrReadOnly,
     CanManageUsers,
 )
 
@@ -90,7 +91,7 @@ class OrgUnitViewSet(viewsets.ModelViewSet):
     """
     queryset = OrgUnit.objects.all().order_by('name')
     serializer_class = OrgUnitSerializer
-    permission_classes = [IsAuthenticated, IsCompanyLevelOrReadOnly]
+    permission_classes = [IsAuthenticated, IsSystemAdminOrReadOnly]
 
 
 class UserManagementViewSet(viewsets.ModelViewSet):
@@ -111,15 +112,15 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         actor = self.request.user
         qs = CustomUser.objects.all().order_by('id')
 
-        if not is_company_level(actor):
+        if not is_system_admin(actor):
             # محدود به اعضای واحدهای تحتِ مدیریتِ این کاربر
             managed_ids = list(actor.managed_units.values_list('id', flat=True))
             qs = qs.filter(unit_id__in=managed_ids)
 
         unit_id = self.request.query_params.get('unit_id')
         if unit_id == 'none':
-            # «بدون واحد» فقط برای سطحِ شرکت معنا دارد؛ مدیرانِ واحد چنین کاربرانی را نمی‌بینند.
-            qs = qs.filter(unit__isnull=True) if is_company_level(actor) else qs.none()
+            # «بدون واحد» فقط برای مدیرِ سیستم معنا دارد؛ مدیرانِ واحد چنین کاربرانی را نمی‌بینند.
+            qs = qs.filter(unit__isnull=True) if is_system_admin(actor) else qs.none()
         elif unit_id:
             qs = qs.filter(unit_id=unit_id)
         return qs
@@ -127,7 +128,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         # حفاظت در سطحِ شیء برای حذف
         actor = self.request.user
-        if not is_company_level(actor):
+        if not is_system_admin(actor):
             managed_ids = set(actor.managed_units.values_list('id', flat=True))
             if instance.unit_id not in managed_ids:
                 from rest_framework.exceptions import PermissionDenied

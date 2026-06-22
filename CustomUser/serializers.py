@@ -137,9 +137,11 @@ class AdminUserManagementSerializer(serializers.ModelSerializer):
         return getattr(request, 'user', None) if request else None
 
     def _is_company_level(self, user) -> bool:
+        # فقط مدیرِ سیستم (company_admin/superuser) اجازهٔ تخصیصِ آزادانهٔ نقش/واحد دارد.
+        # company_pm عمداً مستثناست (او کاربران را مدیریت نمی‌کند).
         if not user or not user.is_authenticated:
             return False
-        return user.is_superuser or getattr(user, 'org_role', None) in ('company_admin', 'company_pm')
+        return user.is_superuser or getattr(user, 'org_role', None) == 'company_admin'
 
     def _managed_unit_ids(self, user):
         if not user or not user.is_authenticated:
