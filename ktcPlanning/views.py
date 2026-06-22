@@ -882,6 +882,89 @@ class TaskRoleViewSet(viewsets.ModelViewSet):
         from CustomUser.serializers import CustomUserSerializer
         return Response(CustomUserSerializer(users.order_by('id'), many=True).data)
 
+    @action(detail=False, methods=['get'], url_path='my-reviewer-tasks')
+    def my_reviewer_tasks(self, request):
+        """
+        لیستِ تمامِ تسک‌هایی که کاربر جاری روی آن‌ها reviewer (یا project manager) است
+        — برای صفحهٔ «انتخاب انجام‌دهنده» (Assign Executors).
+
+        پاسخ شامل:
+          - tasks: لیست تسک‌ها با اطلاعاتِ پروژه، WBS، تاریخ‌ها و executors فعلی
+          - unitMembers: اعضای واحدِ کاربر (برای dropdown انتخاب executor)
+        """
+        actor = request.user
+        unit_id = getattr(actor, 'unit_id', None)
+
+        # تسک‌هایی که این کاربر روی آن‌ها reviewer / project manager است
+        # و نسخه‌اش هنوز قفل نشده
+        task_versions = TaskVersion.objects.filter(
+            is_deleted=False,
+            revision__approved_at__isnull=True,
+            task__roles__user=actor,
+            task__roles__role__in=['reviewer', 'project manager'],
+        ).select_related(
+            'task', 'wbs_node', 'revision', 'revision__project'
+        ).distinct().order_by('revision__project__name', 'sequence')
+
+        # برای دریافتِ executor های فعلی، همهٔ TaskRole های executor مرتبط را با یک query می‌گیریم
+        task_ids = [tv.task_id for tv in task_versions]
+        executor_roles = TaskRole.objects.filter(
+            task_id__in=task_ids,
+            role='executor',
+        ).select_related('user')
+
+        # گروه‌بندی بر اساس (revision_id, task_id)
+        executors_by_task = {}
+        for tr in executor_roles:
+            key = (tr.revision_id, tr.task_id)
+            executors_by_task.setdefault(key, []).append({
+                'taskRoleId': tr.id,
+                'userId': tr.user_id,
+                'username': tr.user.username,
+                'jobTitle': getattr(tr.user, 'job_title', '') or '',
+            })
+
+        # ساخت پاسخ هر تسک
+        tasks_data = []
+        for tv in task_versions:
+            project = tv.revision.project
+            tasks_data.append({
+                'taskId': str(tv.task_id),
+                'revisionId': tv.revision_id,
+                'projectId': str(project.id),
+                'projectName': project.name,
+                'title': tv.title,
+                'wbsCode': tv.wbs_node.wbs_code if tv.wbs_node else '',
+                'wbsTitle': tv.wbs_node.title if tv.wbs_node else '',
+                'plannedStart': tv.planned_start.strftime('%Y-%m-%d %H:%M') if tv.planned_start else None,
+                'plannedFinish': tv.planned_finish.strftime('%Y-%m-%d %H:%M') if tv.planned_finish else None,
+                'durationHours': float(tv.duration_hours) if tv.duration_hours else 0,
+                'description': tv.description or '',
+                'executors': executors_by_task.get((tv.revision_id, tv.task_id), []),
+            })
+
+        # اعضای واحدِ کاربر — dropdown ها از این لیست پر می‌شوند
+        if unit_id:
+            unit_members_qs = User.objects.filter(unit_id=unit_id).order_by('username')
+        else:
+            unit_members_qs = User.objects.none()
+
+        unit_members = [
+            {
+                'id': u.id,
+                'username': u.username,
+                'jobTitle': getattr(u, 'job_title', '') or '',
+                'employeeCode': getattr(u, 'employee_code', '') or '',
+            }
+            for u in unit_members_qs
+        ]
+
+        return Response({
+            'tasks': tasks_data,
+            'unitMembers': unit_members,
+            'unitId': unit_id,
+        })
+
 
 def _date_range(start: date, end: date):
     """Yield every date from start to end (inclusive)."""
