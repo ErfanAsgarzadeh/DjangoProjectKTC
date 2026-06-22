@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Name>پروژه تضمین کیفیت و فرایندنویسی (تلفیق واحد + نوع خروجی)</Name>
+  <StartDate>2026-07-01T08:00:00</StartDate>
+  <FinishDate>2027-06-30T17:00:00</FinishDate>
+  <CalendarUID>1</CalendarUID>
+  <MinutesPerDay>480</MinutesPerDay>
+  <MinutesPerWeek>2400</MinutesPerWeek>
+  <DaysPerMonth>22</DaysPerMonth>
+  <Calendars>
+    <Calendar>
+      <UID>1</UID>
+      <Name>Standard</Name>
+      <IsBaseCalendar>1</IsBaseCalendar>
+      <WeekDays>
+        <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+        <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+      </WeekDays>
+    </Calendar>
+  </Calendars>
+  <Tasks>
+    <Task>
+      <UID>0</UID><ID>0</ID><Name>پروژه تضمین کیفیت و فرایندنویسی</Name>
+      <OutlineLevel>0</OutlineLevel><Summary>1</Summary>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد تولید -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>1</UID><ID>1</ID><Name>واحد تولید</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <!-- فرایندنویسی -->
+    <Task>
+      <UID>2</UID><ID>2</ID><Name>فرایندنویسی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>3</UID><ID>3</ID><Name>فرایند تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>4</UID><ID>4</ID><Name>فرایند کنترل کیفیت خط تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>5</UID><ID>5</ID><Name>فرایند نگهداری و تعمیرات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- مستندسازی -->
+    <Task>
+      <UID>6</UID><ID>6</ID><Name>مستندسازی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>7</UID><ID>7</ID><Name>دستورالعمل جوشکاری</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>8</UID><ID>8</ID><Name>دستورالعمل بازرسی چشمی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>9</UID><ID>9</ID><Name>فرم‌های ثبت کیفیت تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- ممیزی -->
+    <Task>
+      <UID>10</UID><ID>10</ID><Name>ممیزی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>11</UID><ID>11</ID><Name>ممیزی داخلی واحد تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>12</UID><ID>12</ID><Name>اقدامات اصلاحی (CAPA)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- آموزش -->
+    <Task>
+      <UID>13</UID><ID>13</ID><Name>آموزش</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>14</UID><ID>14</ID><Name>نیازسنجی آموزشی واحد</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>15</UID><ID>15</ID><Name>برگزاری دوره ایمنی خط تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد خرید و تدارکات -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>16</UID><ID>16</ID><Name>واحد خرید و تدارکات</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <!-- فرایندنویسی -->
+    <Task>
+      <UID>17</UID><ID>17</ID><Name>فرایندنویسی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>18</UID><ID>18</ID><Name>فرایند خرید داخلی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>19</UID><ID>19</ID><Name>فرایند خرید خارجی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>20</UID><ID>20</ID><Name>فرایند ارزیابی تامین‌کنندگان</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- مستندسازی -->
+    <Task>
+      <UID>21</UID><ID>21</ID><Name>مستندسازی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>22</UID><ID>22</ID><Name>روش اجرایی انتخاب تامین‌کننده</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>23</UID><ID>23</ID><Name>فرم ارزیابی دوره‌ای تامین‌کننده</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- ممیزی -->
+    <Task>
+      <UID>24</UID><ID>24</ID><Name>ممیزی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>25</UID><ID>25</ID><Name>ممیزی فرایند خرید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد انبار و لجستیک -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>26</UID><ID>26</ID><Name>واحد انبار و لجستیک</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <!-- فرایندنویسی -->
+    <Task>
+      <UID>27</UID><ID>27</ID><Name>فرایندنویسی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>28</UID><ID>28</ID><Name>فرایند ورود کالا</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>29</UID><ID>29</ID><Name>فرایند انبارداری و نگهداری</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>30</UID><ID>30</ID><Name>فرایند خروج کالا</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- مستندسازی -->
+    <Task>
+      <UID>31</UID><ID>31</ID><Name>مستندسازی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>32</UID><ID>32</ID><Name>دستورالعمل شمارش موجودی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>33</UID><ID>33</ID><Name>فرم رسید و حواله انبار</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- آموزش -->
+    <Task>
+      <UID>34</UID><ID>34</ID><Name>آموزش</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>35</UID><ID>35</ID><Name>آموزش نرم‌افزار انبار</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد مهندسی و طراحی -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>36</UID><ID>36</ID><Name>واحد مهندسی و طراحی</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <!-- فرایندنویسی -->
+    <Task>
+      <UID>37</UID><ID>37</ID><Name>فرایندنویسی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>38</UID><ID>38</ID><Name>فرایند طراحی و توسعه</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>39</UID><ID>39</ID><Name>فرایند کنترل مدارک فنی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>40</UID><ID>40</ID><Name>فرایند مدیریت تغییرات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- مستندسازی -->
+    <Task>
+      <UID>41</UID><ID>41</ID><Name>مستندسازی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>42</UID><ID>42</ID><Name>روش اجرایی کنترل مدارک</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>43</UID><ID>43</ID><Name>دستورالعمل شماره‌گذاری نقشه‌ها</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- ممیزی -->
+    <Task>
+      <UID>44</UID><ID>44</ID><Name>ممیزی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>45</UID><ID>45</ID><Name>ممیزی کنترل مدارک</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد منابع انسانی -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>46</UID><ID>46</ID><Name>واحد منابع انسانی</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <!-- فرایندنویسی -->
+    <Task>
+      <UID>47</UID><ID>47</ID><Name>فرایندنویسی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>48</UID><ID>48</ID><Name>فرایند جذب و استخدام</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>49</UID><ID>49</ID><Name>فرایند آموزش و توسعه</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>50</UID><ID>50</ID><Name>فرایند ارزیابی عملکرد</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- مستندسازی -->
+    <Task>
+      <UID>51</UID><ID>51</ID><Name>مستندسازی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>52</UID><ID>52</ID><Name>شناسنامه شغل (همه پست‌ها)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>53</UID><ID>53</ID><Name>فرم نیازسنجی آموزشی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- آموزش -->
+    <Task>
+      <UID>54</UID><ID>54</ID><Name>آموزش</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>55</UID><ID>55</ID><Name>برگزاری دوره آشنایی با QMS</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- ستادی (مدیریت کیفیت) -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>56</UID><ID>56</ID><Name>ستادی (مدیریت کیفیت)</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <!-- فرایندنویسی -->
+    <Task>
+      <UID>57</UID><ID>57</ID><Name>فرایندنویسی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>58</UID><ID>58</ID><Name>فرایند بازنگری مدیریت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>59</UID><ID>59</ID><Name>فرایند رسیدگی به شکایات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>60</UID><ID>60</ID><Name>فرایند اقدام اصلاحی/پیشگیرانه</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- مستندسازی -->
+    <Task>
+      <UID>61</UID><ID>61</ID><Name>مستندسازی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>62</UID><ID>62</ID><Name>نظام‌نامه کیفیت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>63</UID><ID>63</ID><Name>خط‌مشی کیفیت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>64</UID><ID>64</ID><Name>نقشه فرایندها (Process Map)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- ممیزی -->
+    <Task>
+      <UID>65</UID><ID>65</ID><Name>ممیزی</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>66</UID><ID>66</ID><Name>برنامه سالانه ممیزی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>67</UID><ID>67</ID><Name>آمادگی ممیزی خارجی (Stage 1 and 2)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>68</UID><ID>68</ID><Name>جمع‌بندی یافته‌ها و CAPA</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <!-- شاخص‌ها (KPI) -->
+    <Task>
+      <UID>69</UID><ID>69</ID><Name>شاخص‌ها (KPI)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>70</UID><ID>70</ID><Name>تعریف شاخص‌های کلیدی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>71</UID><ID>71</ID><Name>پایش و اندازه‌گیری دوره‌ای</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+  </Tasks>
+
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- وابستگی‌ها (Dependencies) -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <Links>
+    <!-- واحد تولید: فرایندنویسی→مستندسازی→ممیزی ; آموزش موازی با مستندسازی -->
+    <Link><PredecessorUID>2</PredecessorUID><SuccessorUID>6</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>6</PredecessorUID><SuccessorUID>10</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>2</PredecessorUID><SuccessorUID>13</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد خرید: فرایندنویسی→مستندسازی→ممیزی -->
+    <Link><PredecessorUID>17</PredecessorUID><SuccessorUID>21</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>21</PredecessorUID><SuccessorUID>24</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد انبار: فرایندنویسی→مستندسازی ; آموزش موازی -->
+    <Link><PredecessorUID>27</PredecessorUID><SuccessorUID>31</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>27</PredecessorUID><SuccessorUID>34</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد مهندسی: فرایندنویسی→مستندسازی→ممیزی -->
+    <Link><PredecessorUID>37</PredecessorUID><SuccessorUID>41</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>41</PredecessorUID><SuccessorUID>44</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد منابع انسانی: فرایندنویسی→مستندسازی ; آموزش موازی -->
+    <Link><PredecessorUID>47</PredecessorUID><SuccessorUID>51</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>47</PredecessorUID><SuccessorUID>54</SuccessorUID><Type>1</Type></Link>
+
+    <!-- ستادی: فرایندنویسی→مستندسازی→ممیزی→KPI -->
+    <Link><PredecessorUID>57</PredecessorUID><SuccessorUID>61</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>61</PredecessorUID><SuccessorUID>65</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>61</PredecessorUID><SuccessorUID>69</SuccessorUID><Type>1</Type></Link>
+
+    <!-- وابستگی بین‌واحدی: ستادی (نقشه فرایندها و نظام‌نامه) اول -->
+    <Link><PredecessorUID>57</PredecessorUID><SuccessorUID>2</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>57</PredecessorUID><SuccessorUID>17</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>57</PredecessorUID><SuccessorUID>27</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>57</PredecessorUID><SuccessorUID>37</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>57</PredecessorUID><SuccessorUID>47</SuccessorUID><Type>1</Type></Link>
+  </Links>
+</Project>
