@@ -6,6 +6,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from mptt.models import MPTTModel
 from mptt.fields import TreeForeignKey
+from ktcPlanning.validators import validate_chat_file
 
 User = get_user_model()
 
@@ -828,7 +829,12 @@ class TaskChatMessage(models.Model):
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="chat_messages")
 
     text = models.TextField(blank=True, default='')
-    file = models.FileField(upload_to='chat_attachments/%Y/%m/', null=True, blank=True)
+    file = models.FileField(
+        upload_to='chat_attachments/%Y/%m/',
+        null=True,
+        blank=True,
+        validators=[validate_chat_file],
+    )
     file_name = models.CharField(max_length=255, blank=True, default='')
     file_type = models.CharField(max_length=50, blank=True, default='')  # e.g. 'image/png', 'application/pdf'
     timestamp = models.DateTimeField(auto_now_add=True)
