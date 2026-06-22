@@ -1,0 +1,690 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Name>پروژه تضمین کیفیت و فرایندنویسی - BPM Lifecycle</Name>
+  <StartDate>2026-07-01T08:00:00</StartDate>
+  <FinishDate>2027-06-30T17:00:00</FinishDate>
+  <CalendarUID>1</CalendarUID>
+  <MinutesPerDay>480</MinutesPerDay>
+  <MinutesPerWeek>2400</MinutesPerWeek>
+  <DaysPerMonth>22</DaysPerMonth>
+  <Calendars>
+    <Calendar>
+      <UID>1</UID>
+      <Name>Standard</Name>
+      <IsBaseCalendar>1</IsBaseCalendar>
+      <WeekDays>
+        <WeekDay><DayType>1</DayType><DayWorking>0</DayWorking></WeekDay>
+        <WeekDay><DayType>2</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>3</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>4</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>5</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>6</DayType><DayWorking>1</DayWorking></WeekDay>
+        <WeekDay><DayType>7</DayType><DayWorking>0</DayWorking></WeekDay>
+      </WeekDays>
+    </Calendar>
+  </Calendars>
+  <Tasks>
+    <Task>
+      <UID>0</UID><ID>0</ID><Name>پروژه تضمین کیفیت و فرایندنویسی</Name>
+      <OutlineLevel>0</OutlineLevel><Summary>1</Summary>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد تولید -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>1</UID><ID>1</ID><Name>واحد تولید</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+
+    <!-- فاز ۱: شناسایی فرایند -->
+    <Task>
+      <UID>2</UID><ID>2</ID><Name>شناسایی فرایند (Process Identification)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>3</UID><ID>3</ID><Name>شناسایی فرایندهای کلیدی واحد تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>4</UID><ID>4</ID><Name>تعیین ورودی/خروجی هر فرایند</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>5</UID><ID>5</ID><Name>تعیین صاحب فرایند (Process Owner)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>6</UID><ID>6</ID><Name>طبقه‌بندی فرایندها (اصلی/پشتیبان/مدیریتی)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- فاز ۲: مستندسازی فرایند -->
+    <Task>
+      <UID>7</UID><ID>7</ID><Name>مستندسازی فرایند (Process Documentation)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>8</UID><ID>8</ID><Name>ترسیم BPMN فرایند تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>9</UID><ID>9</ID><Name>ترسیم BPMN فرایند کنترل کیفیت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>10</UID><ID>10</ID><Name>ترسیم BPMN فرایند نگهداری و تعمیرات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>11</UID><ID>11</ID><Name>نوشتن روش اجرایی (Procedure)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>12</UID><ID>12</ID><Name>نوشتن دستورالعمل‌ها (Work Instructions)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>13</UID><ID>13</ID><Name>طراحی فرم‌ها و چک‌لیست‌ها</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- فاز ۳: اجرا و استقرار -->
+    <Task>
+      <UID>14</UID><ID>14</ID><Name>اجرا و استقرار (Process Implementation)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>15</UID><ID>15</ID><Name>آموزش پرسنل واحد تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>16</UID><ID>16</ID><Name>اجرای آزمایشی (Pilot Run)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>17</UID><ID>17</ID><Name>رفع مغایرت‌های شناسایی‌شده</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>18</UID><ID>18</ID><Name>استقرار نهایی و ابلاغ</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+    <!-- فاز ۴: پایش و اندازه‌گیری -->
+    <Task>
+      <UID>19</UID><ID>19</ID><Name>پایش و اندازه‌گیری (Process Monitoring)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>20</UID><ID>20</ID><Name>تعریف KPI های فرایند تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>21</UID><ID>21</ID><Name>جمع‌آوری داده عملکرد دوره اول</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>22</UID><ID>22</ID><Name>تحلیل شاخص‌ها و مقایسه با اهداف</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>23</UID><ID>23</ID><Name>گزارش‌دهی دوره‌ای به مدیریت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- فاز ۵: ممیزی فرایند -->
+    <Task>
+      <UID>24</UID><ID>24</ID><Name>ممیزی فرایند (Process Audit)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>25</UID><ID>25</ID><Name>ممیزی انطباق فرایند تولید با مستندات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>26</UID><ID>26</ID><Name>ثبت یافته‌ها و عدم انطباق‌ها</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>27</UID><ID>27</ID><Name>صدور گزارش ممیزی واحد تولید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+    <!-- فاز ۶: بهبود فرایند -->
+    <Task>
+      <UID>28</UID><ID>28</ID><Name>بهبود فرایند (Process Improvement)</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>29</UID><ID>29</ID><Name>ریشه‌یابی عدم انطباق‌ها (RCA)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>30</UID><ID>30</ID><Name>تعریف اقدام اصلاحی (CAPA)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>31</UID><ID>31</ID><Name>اجرای اقدام اصلاحی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>32</UID><ID>32</ID><Name>اثربخشی‌سنجی اقدامات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>33</UID><ID>33</ID><Name>بازنگری و بروزرسانی مستندات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد خرید و تدارکات -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>34</UID><ID>34</ID><Name>واحد خرید و تدارکات</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>35</UID><ID>35</ID><Name>شناسایی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>36</UID><ID>36</ID><Name>شناسایی فرایندهای خرید داخلی و خارجی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>37</UID><ID>37</ID><Name>شناسایی فرایند ارزیابی تامین‌کنندگان</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>38</UID><ID>38</ID><Name>تعیین صاحبان فرایند واحد خرید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>39</UID><ID>39</ID><Name>مستندسازی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>40</UID><ID>40</ID><Name>ترسیم BPMN فرایند خرید داخلی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>41</UID><ID>41</ID><Name>ترسیم BPMN فرایند خرید خارجی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>42</UID><ID>42</ID><Name>ترسیم BPMN ارزیابی تامین‌کننده</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>43</UID><ID>43</ID><Name>نوشتن روش اجرایی خرید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>44</UID><ID>44</ID><Name>طراحی فرم درخواست خرید و ارزیابی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <Task>
+      <UID>45</UID><ID>45</ID><Name>اجرا و استقرار</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>46</UID><ID>46</ID><Name>آموزش تیم خرید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>47</UID><ID>47</ID><Name>اجرای آزمایشی فرایند جدید خرید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>48</UID><ID>48</ID><Name>استقرار نهایی و ابلاغ</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>49</UID><ID>49</ID><Name>پایش و اندازه‌گیری</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>50</UID><ID>50</ID><Name>KPI: میانگین زمان تحویل سفارش</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>51</UID><ID>51</ID><Name>KPI: نرخ عدم انطباق تامین‌کننده</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>52</UID><ID>52</ID><Name>گزارش عملکرد فصلی واحد خرید</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>53</UID><ID>53</ID><Name>ممیزی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>54</UID><ID>54</ID><Name>ممیزی فرایند خرید و تامین</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>55</UID><ID>55</ID><Name>بهبود فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>56</UID><ID>56</ID><Name>تحلیل مشکلات تامین‌کنندگان و CAPA</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>57</UID><ID>57</ID><Name>بهبود معیارهای انتخاب تامین‌کننده</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد انبار و لجستیک -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>58</UID><ID>58</ID><Name>واحد انبار و لجستیک</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>59</UID><ID>59</ID><Name>شناسایی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>60</UID><ID>60</ID><Name>شناسایی فرایندهای ورود/نگهداری/خروج کالا</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>61</UID><ID>61</ID><Name>مستندسازی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>62</UID><ID>62</ID><Name>ترسیم BPMN ورود و خروج کالا</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>63</UID><ID>63</ID><Name>دستورالعمل شمارش موجودی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>64</UID><ID>64</ID><Name>طراحی فرم رسید و حواله انبار</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>65</UID><ID>65</ID><Name>اجرا و استقرار</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>66</UID><ID>66</ID><Name>آموزش انباردارها</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>67</UID><ID>67</ID><Name>استقرار نهایی فرایندهای انبار</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>68</UID><ID>68</ID><Name>پایش و اندازه‌گیری</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>69</UID><ID>69</ID><Name>KPI: دقت موجودی (Inventory Accuracy)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>70</UID><ID>70</ID><Name>KPI: زمان تحویل از انبار</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>71</UID><ID>71</ID><Name>ممیزی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>72</UID><ID>72</ID><Name>ممیزی ۵S و فرایند انبار</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>73</UID><ID>73</ID><Name>بهبود فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>74</UID><ID>74</ID><Name>بهبود چیدمان و سیستم ردیابی کالا</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد مهندسی و طراحی -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>75</UID><ID>75</ID><Name>واحد مهندسی و طراحی</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>76</UID><ID>76</ID><Name>شناسایی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>77</UID><ID>77</ID><Name>شناسایی فرایند طراحی و توسعه</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>78</UID><ID>78</ID><Name>شناسایی فرایند مدیریت تغییرات (MOC)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>79</UID><ID>79</ID><Name>مستندسازی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>80</UID><ID>80</ID><Name>ترسیم BPMN طراحی و توسعه</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>81</UID><ID>81</ID><Name>ترسیم BPMN مدیریت تغییرات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>82</UID><ID>82</ID><Name>دستورالعمل شماره‌گذاری و کنترل مدارک</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>83</UID><ID>83</ID><Name>اجرا و استقرار</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>84</UID><ID>84</ID><Name>آموزش تیم مهندسی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>85</UID><ID>85</ID><Name>استقرار سیستم کنترل مدارک</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>86</UID><ID>86</ID><Name>پایش و اندازه‌گیری</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>87</UID><ID>87</ID><Name>KPI: نرخ خطای طراحی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>88</UID><ID>88</ID><Name>KPI: زمان بازنگری مدارک فنی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>89</UID><ID>89</ID><Name>ممیزی و بهبود</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>90</UID><ID>90</ID><Name>ممیزی کنترل مدارک فنی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>91</UID><ID>91</ID><Name>اتوماسیون و بهبود کنترل نسخه مدارک</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- واحد منابع انسانی -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>92</UID><ID>92</ID><Name>واحد منابع انسانی</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>93</UID><ID>93</ID><Name>شناسایی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>94</UID><ID>94</ID><Name>شناسایی فرایند جذب و استخدام</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>95</UID><ID>95</ID><Name>شناسایی فرایند آموزش و توانمندسازی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>96</UID><ID>96</ID><Name>شناسایی فرایند ارزیابی عملکرد</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>97</UID><ID>97</ID><Name>مستندسازی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>98</UID><ID>98</ID><Name>ترسیم BPMN جذب و استخدام</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>99</UID><ID>99</ID><Name>تدوین شناسنامه شغلی (Job Descriptions)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>100</UID><ID>100</ID><Name>طراحی فرم نیازسنجی آموزشی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>101</UID><ID>101</ID><Name>اجرا و استقرار</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>102</UID><ID>102</ID><Name>آموزش مدیران بخش‌ها در خصوص فرایندهای HR</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>103</UID><ID>103</ID><Name>ابلاغ شرح وظایف و فرایندها</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>104</UID><ID>104</ID><Name>پایش و اندازه‌گیری</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>105</UID><ID>105</ID><Name>KPI: اثربخشی آموزش</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>106</UID><ID>106</ID><Name>KPI: نرخ ترک خدمت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>107</UID><ID>107</ID><Name>ممیزی و بهبود</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>108</UID><ID>108</ID><Name>ممیزی صلاحیت و آموزش پرسنل</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>109</UID><ID>109</ID><Name>بهبود برنامه جانشین‌پروری</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- ستادی (مدیریت کیفیت) -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <Task>
+      <UID>110</UID><ID>110</ID><Name>ستادی - مدیریت کیفیت</Name>
+      <OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>111</UID><ID>111</ID><Name>شناسایی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>112</UID><ID>112</ID><Name>نقشه‌برداری کلان فرایندها (Process Map)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>113</UID><ID>113</ID><Name>تعیین تعاملات بین فرایندها (Turtle Diagram)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>114</UID><ID>114</ID><Name>اولویت‌بندی فرایندها برای مستندسازی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>115</UID><ID>115</ID><Name>مستندسازی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>116</UID><ID>116</ID><Name>تدوین نظام‌نامه کیفیت (Quality Manual)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>117</UID><ID>117</ID><Name>تدوین خط‌مشی کیفیت</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>118</UID><ID>118</ID><Name>تدوین ماتریس مستندات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>119</UID><ID>119</ID><Name>روش اجرایی کنترل مستندات و سوابق</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>120</UID><ID>120</ID><Name>روش اجرایی اقدام اصلاحی/پیشگیرانه</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>121</UID><ID>121</ID><Name>اجرا و استقرار</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>122</UID><ID>122</ID><Name>تشکیل کمیته راهبری QMS</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>123</UID><ID>123</ID><Name>ابلاغ خط‌مشی و اهداف کیفی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>124</UID><ID>124</ID><Name>آموزش عمومی QMS به کل سازمان</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+
+
+    <Task>
+      <UID>125</UID><ID>125</ID><Name>پایش و اندازه‌گیری</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>126</UID><ID>126</ID><Name>راه‌اندازی داشبورد KPI سازمانی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>127</UID><ID>127</ID><Name>بازنگری مدیریت (Management Review)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>128</UID><ID>128</ID><Name>تحلیل روند شاخص‌ها و گزارش ادواری</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>129</UID><ID>129</ID><Name>ممیزی فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>130</UID><ID>130</ID><Name>تدوین برنامه سالانه ممیزی داخلی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT8H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>131</UID><ID>131</ID><Name>اجرای ممیزی‌های داخلی (کل واحدها)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>132</UID><ID>132</ID><Name>آمادگی ممیزی خارجی Stage 1</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>133</UID><ID>133</ID><Name>آمادگی ممیزی خارجی Stage 2</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>134</UID><ID>134</ID><Name>جمع‌بندی یافته‌ها و صدور گزارش نهایی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>135</UID><ID>135</ID><Name>بهبود فرایند</Name>
+      <OutlineLevel>2</OutlineLevel><Summary>1</Summary>
+    </Task>
+    <Task>
+      <UID>136</UID><ID>136</ID><Name>تحلیل ریشه‌ای عدم انطباق‌ها (RCA)</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT24H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>137</UID><ID>137</ID><Name>تعریف و اجرای CAPA سازمانی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT32H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>138</UID><ID>138</ID><Name>اثربخشی‌سنجی اقدامات اصلاحی</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT16H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+    <Task>
+      <UID>139</UID><ID>139</ID><Name>بازنگری و بروزرسانی سالانه مستندات</Name>
+      <OutlineLevel>3</OutlineLevel><Duration>PT40H0M0S</Duration><DurationFormat>7</DurationFormat>
+    </Task>
+  </Tasks>
+
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- وابستگی‌ها: هر فاز BPM به فاز قبلی وابسته است (FS) -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <Links>
+    <!-- واحد تولید: شناسایی→مستندسازی→استقرار→پایش→ممیزی→بهبود -->
+    <Link><PredecessorUID>2</PredecessorUID><SuccessorUID>7</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>7</PredecessorUID><SuccessorUID>14</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>14</PredecessorUID><SuccessorUID>19</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>19</PredecessorUID><SuccessorUID>24</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>24</PredecessorUID><SuccessorUID>28</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد خرید: شناسایی→مستندسازی→استقرار→پایش→ممیزی→بهبود -->
+    <Link><PredecessorUID>35</PredecessorUID><SuccessorUID>39</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>39</PredecessorUID><SuccessorUID>45</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>45</PredecessorUID><SuccessorUID>49</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>49</PredecessorUID><SuccessorUID>53</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>53</PredecessorUID><SuccessorUID>55</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد انبار: شناسایی→مستندسازی→استقرار→پایش→ممیزی→بهبود -->
+    <Link><PredecessorUID>59</PredecessorUID><SuccessorUID>61</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>61</PredecessorUID><SuccessorUID>65</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>65</PredecessorUID><SuccessorUID>68</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>68</PredecessorUID><SuccessorUID>71</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>71</PredecessorUID><SuccessorUID>73</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد مهندسی: شناسایی→مستندسازی→استقرار→پایش→ممیزی -->
+    <Link><PredecessorUID>76</PredecessorUID><SuccessorUID>79</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>79</PredecessorUID><SuccessorUID>83</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>83</PredecessorUID><SuccessorUID>86</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>86</PredecessorUID><SuccessorUID>89</SuccessorUID><Type>1</Type></Link>
+
+    <!-- واحد منابع انسانی: شناسایی→مستندسازی→استقرار→پایش→ممیزی -->
+    <Link><PredecessorUID>93</PredecessorUID><SuccessorUID>97</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>97</PredecessorUID><SuccessorUID>101</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>101</PredecessorUID><SuccessorUID>104</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>104</PredecessorUID><SuccessorUID>107</SuccessorUID><Type>1</Type></Link>
+
+    <!-- ستادی: شناسایی→مستندسازی→استقرار→پایش→ممیزی→بهبود -->
+    <Link><PredecessorUID>111</PredecessorUID><SuccessorUID>115</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>115</PredecessorUID><SuccessorUID>121</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>121</PredecessorUID><SuccessorUID>125</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>125</PredecessorUID><SuccessorUID>129</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>129</PredecessorUID><SuccessorUID>135</SuccessorUID><Type>1</Type></Link>
+
+    <!-- وابستگی بین‌واحدی: ستادی (نقشه فرایندها) باید اول تمام شود -->
+    <Link><PredecessorUID>111</PredecessorUID><SuccessorUID>2</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>111</PredecessorUID><SuccessorUID>35</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>111</PredecessorUID><SuccessorUID>59</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>111</PredecessorUID><SuccessorUID>76</SuccessorUID><Type>1</Type></Link>
+    <Link><PredecessorUID>111</PredecessorUID><SuccessorUID>93</SuccessorUID><Type>1</Type></Link>
+  </Links>
+</Project>
