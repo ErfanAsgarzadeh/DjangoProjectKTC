@@ -51,6 +51,13 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
+class UnitOfMeasure(models.Model):
+    code = models.CharField(max_length=20, unique=True)   # HOUR, DAY, LITER
+    name = models.CharField(max_length=50)                # Hour, Day, Liter
+
+    def __str__(self):
+        return self.name
+
 
 class ProjectViewer(models.Model):
     """دسترسیِ مشاهده‌گر (Viewer) در سطحِ پروژه — توسطِ سازندهٔ پروژه اضافه می‌شود."""
@@ -415,6 +422,12 @@ class Resource(models.Model):
     created_at = models.DateTimeField(
 
         auto_now_add=True
+    )
+    unit = models.ForeignKey(
+        UnitOfMeasure,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT
     )
 
     def __str__(self):
@@ -879,3 +892,124 @@ class SystemSettings(models.Model):
     def current(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class ExpenseType(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    unit = models.ForeignKey(
+        UnitOfMeasure,
+        on_delete=models.PROTECT
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class CostTransaction(models.Model):
+    TRANSACTION_TYPES = [
+        ("LABOR", "Labor"),
+        ("MATERIAL", "Material"),
+        ("EQUIPMENT", "Equipment"),
+        ("EXPENSE", "Expense"),
+        ("SUBCONTRACT", "Subcontract"),
+    ]
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="cost_transactions"
+    )
+
+    revision = models.ForeignKey(
+        Revision,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="cost_transactions"
+    )
+
+    task = models.ForeignKey(
+        Task,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="cost_transactions"
+    )
+
+    assignment = models.ForeignKey(
+        Assignment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
+
+    resource = models.ForeignKey(
+        Resource,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
+
+    expense_type = models.ForeignKey(
+        ExpenseType,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
+
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TRANSACTION_TYPES
+    )
+
+    transaction_date = models.DateField()
+
+    quantity = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=1
+    )
+
+
+
+    unit_rate = models.DecimalField(
+        max_digits=14,
+        decimal_places=2
+    )
+
+    amount = models.DecimalField(
+        max_digits=16,
+        decimal_places=2,
+        editable=False
+    )
+
+    description = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        on_delete=models.SET_NULL
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-transaction_date", "-created_at"]
+
+    def clean(self):
+        if not self.resource and not self.expense_type:
+            raise ValidationError(
+                "Either resource or expense_type must be specified."
+            )
+
+    def save(self, *args, **kwargs):
+        self.amount = self.quantity * self.unit_rate
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.transaction_type} - {self.amount}"

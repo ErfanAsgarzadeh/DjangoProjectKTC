@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'auditlog.apps.AuditlogConfig',
     'corsheaders',
     "rest_framework_simplejwt.token_blacklist",
+    'management_reports.apps.ManagementReportsConfig'
 
 ]
 

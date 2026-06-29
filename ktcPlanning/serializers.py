@@ -465,16 +465,41 @@ class ResourceExceptionSerializer(serializers.ModelSerializer):
         ]
 
 class ResourceRateSerializer(serializers.ModelSerializer):
-    resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
+    resourceId = serializers.PrimaryKeyRelatedField(
+        source='resource',
+        queryset=Resource.objects.all()
+    )
     effectiveFrom = serializers.DateField(source='effective_from')
-    regularRate = serializers.DecimalField(source='regular_rate', max_digits=10, decimal_places=2)
-    overtimeRate = serializers.DecimalField(source='overtime_rate', max_digits=10, decimal_places=2)
+    regularRate = serializers.DecimalField(
+        source='regular_rate',
+        max_digits=10,
+        decimal_places=2
+    )
+    overtimeRate = serializers.DecimalField(
+        source='overtime_rate',
+        max_digits=10,
+        decimal_places=2
+    )
 
     class Meta:
         model = ResourceRate
         fields = [
-            'id', 'resource', 'effective_from', 'regular_rate', 'overtime_rate',
-            'resourceId', 'effectiveFrom', 'regularRate', 'overtimeRate'
+            'id',
+            'resource',
+            'effective_from',
+            'regular_rate',
+            'overtime_rate',
+            'resourceId',
+            'effectiveFrom',
+            'regularRate',
+            'overtimeRate',
+        ]
+
+        read_only_fields = [
+            'resource',
+            'effective_from',
+            'regular_rate',
+            'overtime_rate',
         ]
 
 class AssignmentSerializer(serializers.ModelSerializer):
