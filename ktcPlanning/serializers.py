@@ -502,14 +502,22 @@ class ResourceRateSerializer(serializers.ModelSerializer):
             'overtime_rate',
         ]
 
+
 class AssignmentSerializer(serializers.ModelSerializer):
     taskId = serializers.PrimaryKeyRelatedField(source='task', queryset=Task.objects.all())
     resourceId = serializers.PrimaryKeyRelatedField(source='resource', queryset=Resource.objects.all())
     revisionId = serializers.PrimaryKeyRelatedField(source='revision', queryset=Revision.objects.all())
 
     unitsPercent = serializers.DecimalField(source='units_percent', max_digits=5, decimal_places=2)
-    plannedHours = serializers.DecimalField(source='planned_hours', max_digits=10, decimal_places=2, required=False,default=0)
-    actualHours = serializers.DecimalField(source='actual_hours', max_digits=10, decimal_places=2, required=False,default=0)
+    plannedHours = serializers.DecimalField(source='planned_hours', max_digits=10, decimal_places=2, required=False,
+                                            default=0)
+    actualHours = serializers.DecimalField(source='actual_hours', max_digits=10, decimal_places=2, required=False,
+                                           default=0)
+
+    # ── فیلدهای نمایشی جدید ──────────────────────────────────────────────────
+    resource_name = serializers.CharField(source='resource.name', read_only=True)
+    resource_type = serializers.CharField(source='resource.resource_type', read_only=True)
+
     class Meta:
         model = Assignment
         fields = [
@@ -519,7 +527,10 @@ class AssignmentSerializer(serializers.ModelSerializer):
             'revisionId',
             'unitsPercent',
             'plannedHours',
-            'actualHours'
+            'actualHours',
+            # نمایشی
+            'resource_name',
+            'resource_type',
         ]
 
 
@@ -553,3 +564,85 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemSettings
         fields = ['allowPlanningManagerBypassReviewer']
+
+
+class UnitOfMeasureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnitOfMeasure
+        fields = ['id', 'code', 'name']
+
+class ExpenseTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseType
+        fields = ['id', 'name', 'description', 'is_active', 'unit']
+
+# ─── جایگزین کن این بلاک را در serializers.py ───────────────────────────────
+
+class CostTransactionSerializer(serializers.ModelSerializer):
+    # فیلدهای read-only که بکند محاسبه می‌کند
+    amount = serializers.DecimalField(max_digits=16, decimal_places=2, read_only=True)
+    created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    # نمایش نام منبع انتخابی برای خواندن آسان در فرانت
+    resource_name = serializers.CharField(source='resource.name', read_only=True, default=None)
+    expense_type_name = serializers.CharField(source='expense_type.name', read_only=True, default=None)
+    task_title = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CostTransaction
+        fields = [
+            'id',
+            'project',
+            'revision',
+            'task',
+            'assignment',
+            'resource_rate',   # FK — برای non-EXPENSE اجباری
+            'resource',        # FK — اختیاری (خوانده می‌شود از resource_rate.resource در clean)
+            'expense_type',    # FK — برای EXPENSE اجباری
+            'transaction_type',
+            'transaction_date',
+            'quantity',
+            'unit_rate',       # برای non-EXPENSE
+            'expense_rate',    # برای EXPENSE
+            'amount',          # read-only، محاسبه‌شده در save()
+            'description',
+            'created_by',
+            'created_at',
+            # فیلدهای کمکی نمایشی (read-only)
+            'resource_name',
+            'expense_type_name',
+            'task_title',
+        ]
+        read_only_fields = ['amount', 'created_by', 'created_at']
+
+    def get_task_title(self, obj):
+        if not obj.task:
+            return None
+        tv = obj.task.versions.filter(is_deleted=False).last()
+        return tv.title if tv else str(obj.task.id)
+
+class TaskDropdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = ['id', 'name', 'code']
+
+    def get_name(self, obj):
+        # گرفتن عنوان از نسخه فعال (ریویژنِ باز و قفل‌نشده)
+        active_version = obj.versions.filter(revision__approved_at__isnull=True, is_deleted=False).first()
+        if not active_version:
+            # در غیر این صورت، آخرین نسخه موجود
+            active_version = obj.versions.filter(is_deleted=False).last()
+        return active_version.title if active_version else "تسک بدون عنوان"
+
+    def get_code(self, obj):
+        active_version = obj.versions.filter(revision__approved_at__isnull=True, is_deleted=False).first()
+        if not active_version:
+            active_version = obj.versions.filter(is_deleted=False).last()
+
+        if active_version and active_version.wbs_node:
+            return active_version.wbs_node.wbs_code,active_version.wbs_node.title
+        return ""

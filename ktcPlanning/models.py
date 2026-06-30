@@ -917,6 +917,7 @@ class CostTransaction(models.Model):
         ("EQUIPMENT", "Equipment"),
         ("EXPENSE", "Expense"),
         ("SUBCONTRACT", "Subcontract"),
+        ("COST","Cost"),
     ]
 
     project = models.ForeignKey(
@@ -945,7 +946,21 @@ class CostTransaction(models.Model):
         Assignment,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL
+        on_delete=models.PROTECT
+    )
+
+    resource_rate = models.ForeignKey(
+        ResourceRate,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT
+    )
+
+    expense_type = models.ForeignKey(
+        ExpenseType,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT
     )
 
     resource = models.ForeignKey(
@@ -955,12 +970,6 @@ class CostTransaction(models.Model):
         on_delete=models.SET_NULL
     )
 
-    expense_type = models.ForeignKey(
-        ExpenseType,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
 
     transaction_type = models.CharField(
         max_length=20,
@@ -975,11 +984,11 @@ class CostTransaction(models.Model):
         default=1
     )
 
-
-
-    unit_rate = models.DecimalField(
+    expense_rate = models.DecimalField(
         max_digits=14,
-        decimal_places=2
+        decimal_places=2,
+        null=True,
+        blank=True
     )
 
     amount = models.DecimalField(
@@ -987,6 +996,14 @@ class CostTransaction(models.Model):
         decimal_places=2,
         editable=False
     )
+
+    unit_rate = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
 
     description = models.TextField(blank=True)
 
@@ -1002,13 +1019,37 @@ class CostTransaction(models.Model):
         ordering = ["-transaction_date", "-created_at"]
 
     def clean(self):
-        if not self.resource and not self.expense_type:
-            raise ValidationError(
-                "Either resource or expense_type must be specified."
-            )
+
+        if self.transaction_type == "EXPENSE":
+
+            if not self.expense_type:
+                raise ValidationError("ExpenseType is required.")
+
+            if self.resource_rate:
+                raise ValidationError("Expense cannot have ResourceRate.")
+
+        else:
+
+            if not self.assignment:
+                raise ValidationError("Assignment is required.")
+
+            if not self.resource_rate:
+                raise ValidationError("ResourceRate is required.")
+
+            if self.resource_rate.resource != self.assignment.resource:
+                raise ValidationError(
+                    "ResourceRate must belong to Assignment resource."
+                )
 
     def save(self, *args, **kwargs):
-        self.amount = self.quantity * self.unit_rate
+
+        if self.transaction_type == "EXPENSE":
+            rate = self.expense_rate
+        else:
+            rate = self.resource_rate.regular_rate
+
+        self.amount = self.quantity * rate
+
         super().save(*args, **kwargs)
 
     def __str__(self):

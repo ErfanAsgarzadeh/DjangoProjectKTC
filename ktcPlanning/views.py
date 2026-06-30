@@ -18,7 +18,8 @@ from .cpm import CPMEngine
 # ایمپورت تمامی مدل‌های مورد نیاز
 from .models import Project, Revision, WBSNodeVersion, TaskVersion, Dependency, TaskRole, Task, WBSNode, TaskReportLog, \
     TaskActual, TaskChatMessage, Assignment, Resource, ResourcePool, ResourceRole, ResourceSkill, ResourceSkillMapping, \
-    ResourceException, ResourceRate, VarianceReport, Calendar, ProjectViewer, SystemSettings
+    ResourceException, ResourceRate, VarianceReport, Calendar, ProjectViewer, SystemSettings, UnitOfMeasure, \
+    ExpenseType, CostTransaction
 from .serializers import (
     ProjectSerializer,
     RevisionSerializer,
@@ -28,7 +29,8 @@ from .serializers import (
     TaskRoleSerializer, TaskReportLogSerializer, TaskChatMessageSerializer, ResourcePoolSerializer,
     ResourceRoleSerializer, ResourceSkillSerializer, ResourceSerializer, ResourceSkillMappingSerializer,
     ResourceExceptionSerializer, ResourceRateSerializer, AssignmentSerializer, VarianceReportSerializer,
-    CalendarSerializer, ProjectViewerSerializer, SystemSettingsSerializer
+    CalendarSerializer, ProjectViewerSerializer, SystemSettingsSerializer, UnitOfMeasureSerializer,
+    ExpenseTypeSerializer, CostTransactionSerializer, TaskDropdownSerializer
 )
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -1294,22 +1296,40 @@ class ResourceRateViewSet(viewsets.ModelViewSet):
     serializer_class = ResourceRateSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # فیلتر امنیتی/دسترسی (اگر داری)
+        # queryset = queryset.filter(...)
+
+        resource_id = self.request.query_params.get('resource_id')
+        before_date = self.request.query_params.get('before_date')
+
+        if resource_id:
+            queryset = queryset.filter(resource_id=resource_id)
+
+        if before_date:
+            queryset = queryset.filter(effectiveFrom__lte=before_date)
+
+        return queryset
+
 class AssignmentViewSet(viewsets.ModelViewSet):
     queryset = Assignment.objects.all()
     serializer_class = AssignmentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """
-        فیلتر کردن Assignment ها بر اساس ریویژن (Revision)
-        این متد باعث می‌شود وقتی فرانت‌اند `?revision_id=xxx` را می‌فرستد،
-        فقط رکوردهای همان نسخه برگشت داده شود.
-        """
         queryset = super().get_queryset()
         queryset = queryset.filter(revision__project_id__in=accessible_project_ids(self.request.user))
+
         revision_id = self.request.query_params.get('revision_id')
+        task_id = self.request.query_params.get('task_id')
+
         if revision_id:
             queryset = queryset.filter(revision_id=revision_id)
+        if task_id:
+            queryset = queryset.filter(task_id=task_id)
+
         return queryset
 
 
@@ -1540,3 +1560,63 @@ class SystemSettingsView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class UnitOfMeasureViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ویوست برای واحدهای اندازه‌گیری.
+    معمولاً واحدها فقط خواندنی (ReadOnly) هستند و از طریق پنل ادمین یا شل اضافه می‌شوند.
+    اگر می‌خواهید از طریق API هم قابلیت اضافه کردن داشته باشید، از ModelViewSet استفاده کنید.
+    """
+    queryset = UnitOfMeasure.objects.all().order_by('name')
+    serializer_class = UnitOfMeasureSerializer
+    permission_classes = [IsAuthenticated] # در صورت نیاز به احراز هویت
+
+class ExpenseTypeViewSet(viewsets.ModelViewSet):
+    """
+    ویوست کامل برای مدیریت انواع هزینه‌ها (Expense Types).
+    """
+    queryset = ExpenseType.objects.all().order_by('name')
+    serializer_class = ExpenseTypeSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class CostTransactionViewSet(viewsets.ModelViewSet):
+    """مدیریت تراکنش‌های مالی و هزینه‌ها"""
+    queryset = CostTransaction.objects.all().order_by('-transaction_date', '-created_at')
+    serializer_class = CostTransactionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # فیلتر کردن هزینه‌ها بر اساس پروژه‌هایی که کاربر دسترسی دارد
+        queryset = queryset.filter(project_id__in=accessible_project_ids(self.request.user))
+
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        # اختصاص کاربری که تراکنش را ثبت می‌کند
+        serializer.save(created_by=self.request.user)
+
+
+class TaskViewSet(viewsets.ReadOnlyModelViewSet):
+    """ویوست فقط‌خواندنی برای تغذیهٔ دراپ‌داونِ تسک‌ها در فرانت‌اند"""
+    queryset = Task.objects.all()
+    serializer_class = TaskDropdownSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # فیلتر امنیتی: فقط پروژه‌هایی که کاربر به آن‌ها دسترسی دارد
+        queryset = queryset.filter(project_id__in=accessible_project_ids(self.request.user))
+
+        # فیلتر بر اساس پروژه انتخابی در فرانت‌اند
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+
+        return queryset
